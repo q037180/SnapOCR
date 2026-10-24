@@ -65,7 +65,7 @@ pyinstaller --noconfirm --windowed --name SnapOCR --collect-all rapidocr entry.p
 
 ## 效果演示
 
-**长悬浮 / 双击历史条目** — 浮窗预览完整内容：
+**长悬浮 / 双击历史条目** — 在网页上框选识别，文字自动进历史；长悬浮条目即可浮窗预览完整内容：
 
 ![长悬浮历史条目，浮窗预览完整内容](assets/preview-hover.gif)
 
