@@ -5,8 +5,17 @@ import json
 import os
 from datetime import datetime
 
-from PySide6.QtCore import QObject, Qt, QThread, Signal
-from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap, QImage
+from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal
+from PySide6.QtGui import (
+    QAction,
+    QCursor,
+    QColor,
+    QFont,
+    QIcon,
+    QPainter,
+    QPixmap,
+    QImage,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -31,6 +40,7 @@ from app.core.exporter import export_text
 from app.core.stitcher import StitchWorker
 from app.ui.capture_overlay import CaptureOverlay
 from app.ui.longshot import LongShotBar, LongShotDialog
+from app.ui.preview_popup import PreviewPopup
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.translate_dialog import TranslateDialog
 
@@ -136,6 +146,9 @@ class MainWindow(QMainWindow):
         self._longshot_worker: StitchWorker | None = None
         self._longshot_bar: LongShotBar | None = None
         self._longshot_dlg: LongShotDialog | None = None
+        self._preview: PreviewPopup | None = None
+        self._hover_item: QListWidgetItem | None = None
+        self._hover_pos = None
         self._history: list[dict] = self._load_history()
 
         self._build_ui()
@@ -194,6 +207,7 @@ class MainWindow(QMainWindow):
         self.list = QListWidget()
         self.list.setWordWrap(True)
         self.list.setAlternatingRowColors(True)
+        self.list.setMouseTracking(True)  # 长悬浮预览需要跟踪鼠标
         layout.addWidget(self.list, 1)
         self.search.setStyleSheet(
             "QLineEdit { background: rgba(255,255,255,200);"
@@ -216,7 +230,11 @@ class MainWindow(QMainWindow):
         self.btn_export.clicked.connect(self._export_selected)
         self.btn_delete.clicked.connect(self._delete_selected)
         self.btn_clear.clicked.connect(self._clear_history)
-        self.list.itemDoubleClicked.connect(lambda _item: self._copy_selected())
+        self.list.itemDoubleClicked.connect(self._on_item_double_clicked)
+        self._hover_timer = QTimer(self)
+        self._hover_timer.setSingleShot(True)
+        self._hover_timer.timeout.connect(self._on_hover_timeout)
+        self.list.itemEntered.connect(self._on_item_hovered)
         self._refresh_list()
 
     def _build_tray(self) -> None:
@@ -536,10 +554,34 @@ class MainWindow(QMainWindow):
             if len(preview) > 80:
                 preview = preview[:80] + "…"
             it = QListWidgetItem(f"{item['time']}    {preview}")
-            it.setToolTip(item["text"])
             it.setData(Qt.UserRole, i)
             self.list.addItem(it)
         self.list.setUpdatesEnabled(True)
+
+    # ---- 悬浮/双击预览完整内容 ----
+    def _on_item_hovered(self, item: QListWidgetItem) -> None:
+        """鼠标进入条目：约半秒后浮现完整内容（长悬浮）。"""
+        self._hover_item = item
+        rect = self.list.visualItemRect(item)
+        self._hover_pos = self.list.viewport().mapToGlobal(rect.bottomLeft())
+        self._hover_timer.start(500)
+
+    def _on_hover_timeout(self) -> None:
+        if self._hover_item is not None:
+            self._show_preview(self._hover_item, self._hover_pos, 6000)
+
+    def _on_item_double_clicked(self, item: QListWidgetItem) -> None:
+        self._hover_timer.stop()  # 双击已弹出浮窗，避免悬浮超时再次挪动
+        self._copy_selected()
+        self._show_preview(item, QCursor.pos(), 8000)
+
+    def _show_preview(self, item: QListWidgetItem, global_pos, timeout_ms: int) -> None:
+        idx = item.data(Qt.UserRole)
+        if not isinstance(idx, int) or not (0 <= idx < len(self._history)):
+            return
+        if self._preview is None:
+            self._preview = PreviewPopup()
+        self._preview.show_text(self._history[idx]["text"], global_pos, timeout_ms)
 
     def _copy_selected(self) -> None:
         rows = sorted({i.data(Qt.UserRole) for i in self.list.selectedIndexes()})
