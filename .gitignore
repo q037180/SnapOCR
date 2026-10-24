@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+venv/
+.venv/
+
+# 打包产物
+build/
+dist/
+*.spec
+
+# 运行时生成的模型缓存
+models/
+*.onnx
+
+# IDE
+.idea/
+.vscode/
+
+# 系统文件
+Thumbs.db
+Desktop.ini
+.env
