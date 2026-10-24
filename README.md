@@ -69,7 +69,7 @@ pyinstaller --noconfirm --windowed --name SnapOCR --collect-all rapidocr entry.p
 
 ![长悬浮历史条目，浮窗预览完整内容](assets/preview-hover.gif)
 
-**截屏翻译** — 框选英文区域，识别后自动弹出翻译窗口并给出中文译文：
+**截屏翻译** — 在网页上框选英文段落，识别后自动弹出翻译窗口，一键得到中文译文：
 
 ![截屏翻译：识别英文并自动翻译成中文](assets/preview-translate.gif)
 
