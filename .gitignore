@@ -18,6 +18,7 @@ models/
 # IDE
 .idea/
 .vscode/
+.trae-html-share-packages/
 
 # 系统文件
 Thumbs.db

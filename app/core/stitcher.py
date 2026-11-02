@@ -1,7 +1,11 @@
-"""长截图：注入滚轮滚动页面，逐帧抓取并按重叠区域拼接。"""
+"""长截图：注入滚轮滚动页面，逐帧抓取并按重叠区域拼接。
+
+自动滚动注入使用 Win32 mouse_event，仅 Windows 支持；
+其他平台运行时给出明确提示（拼接算法本身跨平台）。
+"""
 from __future__ import annotations
 
-import ctypes
+import sys
 import threading
 
 import cv2
@@ -14,6 +18,13 @@ from app import config
 
 _WHEEL_DELTA = 120  # Windows 标准滚轮一格的 delta，负值向下滚
 _MOUSEEVENTF_WHEEL = 0x0800
+
+if sys.platform == "win32":
+    import ctypes
+
+    _user32 = ctypes.windll.user32
+else:
+    _user32 = None  # 非 Windows：无滚轮注入能力，长截图启动时提示
 
 
 def _stitch_step(
@@ -58,6 +69,9 @@ class StitchWorker(QThread):
         self._stop.set()
 
     def run(self) -> None:
+        if _user32 is None:
+            self.fail.emit("长截图自动滚动目前仅支持 Windows（需要注入滚轮事件）")
+            return
         try:
             image = self._capture()
         except Exception as exc:  # noqa: BLE001

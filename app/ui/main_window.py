@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QSystemTrayIcon,
     QVBoxLayout,
@@ -36,10 +37,12 @@ from PySide6.QtWidgets import (
 
 from app import config
 from app.core.engine import compact_cjk, get_engine
-from app.core.exporter import export_text
+from app.core.exporter import export_text, export_xlsx
+from app.core.pdf_ocr import PdfWorker
 from app.core.stitcher import StitchWorker
 from app.ui.capture_overlay import CaptureOverlay
 from app.ui.longshot import LongShotBar, LongShotDialog
+from app.ui.pin_window import PinWindow
 from app.ui.preview_popup import PreviewPopup
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.translate_dialog import TranslateDialog
@@ -116,13 +119,49 @@ class OcrWorker(QThread):
     done = Signal(str)
     fail = Signal(str)
 
+    def __init__(self, image=None, files: list[tuple[str, bytes]] | None = None) -> None:
+        super().__init__()
+        self._image = image
+        self._files = files or []  # 拖拽的图片文件 [(文件名, 字节)]
+
+    def run(self) -> None:
+        try:
+            if self._files:
+                parts: list[str] = []
+                multi = len(self._files) > 1
+                for name, data in self._files:
+                    text = get_engine().recognize_bytes(data)
+                    parts.append(f"== {name} ==\n{text}" if multi else text)
+                self.done.emit("\n\n".join(parts))
+            else:
+                self.done.emit(get_engine().recognize_image(self._image))
+        except Exception as exc:  # noqa: BLE001
+            self.fail.emit(str(exc))
+
+
+class TableWorker(QThread):
+    """表格识别线程：返回行列矩阵。"""
+
+    done = Signal(list)  # list[list[str]]
+    fail = Signal(str)
+
     def __init__(self, image) -> None:
         super().__init__()
         self._image = image
 
     def run(self) -> None:
         try:
-            self.done.emit(get_engine().recognize_image(self._image))
+            import numpy as np
+            from PySide6.QtGui import QImage
+
+            img = self._image.convertToFormat(QImage.Format_BGR888)
+            h, w, stride = img.height(), img.width(), img.bytesPerLine()
+            raw = np.frombuffer(bytes(img.constBits()), np.uint8)
+            if stride == w * 3:
+                arr = raw.reshape(h, w, 3)
+            else:
+                arr = raw.reshape(h, stride)[:, : w * 3].reshape(h, w, 3)
+            self.done.emit(get_engine().recognize_table(arr))
         except Exception as exc:  # noqa: BLE001
             self.fail.emit(str(exc))
 
@@ -134,26 +173,35 @@ class HotkeyBridge(QObject):
 
 
 class MainWindow(QMainWindow):
+    IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff"}
+
     def __init__(self, preload: bool = True) -> None:
         super().__init__()
         self.setWindowTitle(config.APP_TITLE)
         self.resize(640, 540)
+        self.setAcceptDrops(True)  # 拖拽图片文件批量识别（Umi-OCR 批量 OCR）
         self._overlay: CaptureOverlay | None = None
         self._worker: OcrWorker | None = None
+        self._table_worker: TableWorker | None = None
+        self._pdf_worker: PdfWorker | None = None
+        self._pdf_dlg: QProgressDialog | None = None
+        self._pins: list[PinWindow] = []  # 贴图窗口可同时存在多个
         self._translate_dlg: TranslateDialog | None = None
         self._capture_translate = False  # 本次框选是否用于截屏翻译
         self._capture_long = False  # 本次框选是否用于长截图
+        self._capture_table = False  # 本次框选是否用于表格识别
+        self._capture_pin = False  # 本次框选是否用于截图贴图
         self._longshot_worker: StitchWorker | None = None
         self._longshot_bar: LongShotBar | None = None
         self._longshot_dlg: LongShotDialog | None = None
         self._preview: PreviewPopup | None = None
-        self._hover_item: QListWidgetItem | None = None
-        self._hover_pos = None
         self._history: list[dict] = self._load_history()
 
         self._build_ui()
         self._build_tray()
         self._register_hotkey()
+        if getattr(self, "_hotkey_error", ""):
+            self.statusBar().showMessage(self._hotkey_error, 15000)
 
         self._preload: EnginePreloader | None = (
             EnginePreloader() if preload else None
@@ -186,9 +234,15 @@ class MainWindow(QMainWindow):
         self.btn_capture = QPushButton("立即截图")
         self.btn_translate = QPushButton("截屏翻译")
         self.btn_long = QPushButton("长截图")
+        self.btn_table = QPushButton("识别表格")
+        self.btn_pin = QPushButton("截图贴图")
+        self.btn_pdf = QPushButton("PDF识别")
         self.btn_settings = QPushButton("设置")
         self.btn_capture.setStyleSheet("font-weight: bold;")
-        for b in (self.btn_capture, self.btn_translate, self.btn_long):
+        for b in (
+            self.btn_capture, self.btn_translate, self.btn_long,
+            self.btn_table, self.btn_pin, self.btn_pdf,
+        ):
             row.addWidget(b)
         row.addStretch(1)
         row.addWidget(self.btn_settings)
@@ -207,7 +261,6 @@ class MainWindow(QMainWindow):
         self.list = QListWidget()
         self.list.setWordWrap(True)
         self.list.setAlternatingRowColors(True)
-        self.list.setMouseTracking(True)  # 长悬浮预览需要跟踪鼠标
         layout.addWidget(self.list, 1)
         self.search.setStyleSheet(
             "QLineEdit { background: rgba(255,255,255,200);"
@@ -225,16 +278,17 @@ class MainWindow(QMainWindow):
         self.btn_capture.clicked.connect(self.start_capture)
         self.btn_translate.clicked.connect(lambda: self.start_capture(translate=True))
         self.btn_long.clicked.connect(lambda: self.start_capture(long=True))
+        self.btn_table.clicked.connect(self._start_table_capture)
+        self.btn_pin.clicked.connect(lambda: self.start_capture(pin=True))
+        self.btn_pdf.clicked.connect(self._start_pdf_ocr)
         self.btn_settings.clicked.connect(self._open_settings)
         self.btn_copy.clicked.connect(self._copy_selected)
         self.btn_export.clicked.connect(self._export_selected)
         self.btn_delete.clicked.connect(self._delete_selected)
         self.btn_clear.clicked.connect(self._clear_history)
         self.list.itemDoubleClicked.connect(self._on_item_double_clicked)
-        self._hover_timer = QTimer(self)
-        self._hover_timer.setSingleShot(True)
-        self._hover_timer.timeout.connect(self._on_hover_timeout)
-        self.list.itemEntered.connect(self._on_item_hovered)
+        # 单击条目浮窗预览完整内容（替代原长悬浮，避免误触发）
+        self.list.itemClicked.connect(self._on_item_clicked)
         self._refresh_list()
 
     def _build_tray(self) -> None:
@@ -243,12 +297,18 @@ class MainWindow(QMainWindow):
         act_capture = QAction("立即截图", menu)
         act_translate = QAction("截屏翻译", menu)
         act_longshot = QAction("长截图", menu)
+        act_table = QAction("识别表格", menu)
+        act_pin = QAction("截图贴图", menu)
+        act_pdf = QAction("PDF识别...", menu)
         act_show = QAction("显示历史窗口", menu)
-        act_settings = QAction("快捷键设置...", menu)
+        act_settings = QAction("设置...", menu)
         act_quit = QAction("退出", menu)
         act_capture.triggered.connect(self.start_capture)
         act_translate.triggered.connect(lambda: self.start_capture(translate=True))
         act_longshot.triggered.connect(lambda: self.start_capture(long=True))
+        act_table.triggered.connect(self._start_table_capture)
+        act_pin.triggered.connect(lambda: self.start_capture(pin=True))
+        act_pdf.triggered.connect(self._start_pdf_ocr)
         act_show.triggered.connect(self._show_window)
         act_settings.triggered.connect(self._open_settings)
         act_quit.triggered.connect(self._quit)
@@ -267,6 +327,9 @@ class MainWindow(QMainWindow):
         menu.addAction(act_capture)
         menu.addAction(act_translate)
         menu.addAction(act_longshot)
+        menu.addAction(act_table)
+        menu.addAction(act_pin)
+        menu.addAction(act_pdf)
         menu.addAction(act_show)
         menu.addAction(act_autocopy)
         menu.addAction(act_compact)
@@ -279,42 +342,64 @@ class MainWindow(QMainWindow):
         self.tray.show()
 
     def _register_hotkey(self) -> None:
-        import keyboard
+        """注册全局热键。
+
+        keyboard 库在 Linux 需要 root 权限、macOS 需要「辅助功能」权限，
+        注册失败时安静降级：GUI 仍可用（按钮/托盘都能触发），只给出提示。
+        """
+        try:
+            import keyboard
+        except Exception as exc:  # noqa: BLE001
+            self._hotkey_error = f"全局热键不可用（{exc}），请用按钮/托盘菜单触发"
+            return
+
+        self._hotkey_error = ""
+
+        def _bind(hotkey: str, bridge: "HotkeyBridge") -> bool:
+            try:
+                keyboard.add_hotkey(hotkey, bridge.triggered.emit)
+                return True
+            except Exception:  # noqa: BLE001
+                return False
 
         self._hotkey_bridge = HotkeyBridge()
         self._hotkey_bridge.triggered.connect(self.start_capture)
-        keyboard.add_hotkey(config.HOTKEY, self._hotkey_bridge.triggered.emit)
+        ok1 = _bind(config.HOTKEY, self._hotkey_bridge)
 
         # 截屏翻译热键：框选 → 识别 → 自动弹出翻译
         self._hotkey_tr_bridge = HotkeyBridge()
         self._hotkey_tr_bridge.triggered.connect(
             lambda: self.start_capture(translate=True)
         )
-        keyboard.add_hotkey(
-            config.TRANSLATE_HOTKEY, self._hotkey_tr_bridge.triggered.emit
-        )
+        ok2 = _bind(config.TRANSLATE_HOTKEY, self._hotkey_tr_bridge)
 
         # 长截图热键：框选 → 滚动采集 → 拼接预览
         self._hotkey_long_bridge = HotkeyBridge()
         self._hotkey_long_bridge.triggered.connect(
             lambda: self.start_capture(long=True)
         )
-        keyboard.add_hotkey(
-            config.HOTKEY_LONG, self._hotkey_long_bridge.triggered.emit
-        )
+        ok3 = _bind(config.HOTKEY_LONG, self._hotkey_long_bridge)
+
+        if not (ok1 and ok2 and ok3):
+            self._hotkey_error = (
+                "全局热键注册失败（Linux 需 root，macOS 需授予辅助功能权限），"
+                "请用按钮/托盘菜单触发"
+            )
 
     # ---- 截图流程 ----
-    def start_capture(self, translate: bool = False, long: bool = False) -> None:
+    def start_capture(self, translate: bool = False, long: bool = False,
+                      pin: bool = False) -> None:
         if self._overlay is not None:
             return
-        if self._worker is not None and self._worker.isRunning():
-            self.statusBar().showMessage("上一次识别还在进行中，请稍候", 3000)
+        if not self._check_ocr_busy():
             return
         if self._longshot_bar is not None:
             self.statusBar().showMessage("长截图会话进行中，请先完成或取消", 3000)
             return
         self._capture_translate = translate
         self._capture_long = long
+        self._capture_pin = pin
+        self._capture_table = False
         self._overlay = CaptureOverlay()
         if long:
             self._overlay.regionSelected.connect(self._on_region_selected)
@@ -323,21 +408,121 @@ class MainWindow(QMainWindow):
         self._overlay.cancelled.connect(self._on_capture_cancelled)
         self._overlay.start()
 
+    def _check_ocr_busy(self) -> bool:
+        """任一 OCR 类线程运行中返回 False 并提示。"""
+        for name, w in (
+            ("上一次识别", self._worker),
+            ("表格识别", self._table_worker),
+            ("PDF 识别", self._pdf_worker),
+        ):
+            if w is not None and w.isRunning():
+                self.statusBar().showMessage(f"{name}进行中，请稍候", 3000)
+                return False
+        return True
+
+    def _start_table_capture(self) -> None:
+        """表格识别：未开启时引导到设置。"""
+        if not config.OCR_TABLE:
+            QMessageBox.information(
+                self, config.APP_NAME, "表格识别未开启，请在「设置 → 功能」中勾选。"
+            )
+            return
+        if self._overlay is not None:
+            return
+        if not self._check_ocr_busy():
+            return
+        if self._longshot_bar is not None:
+            self.statusBar().showMessage("长截图会话进行中，请先完成或取消", 3000)
+            return
+        self._capture_translate = False
+        self._capture_long = False
+        self._capture_pin = False
+        self._capture_table = True
+        self._overlay = CaptureOverlay()
+        self._overlay.captured.connect(self._on_captured)
+        self._overlay.cancelled.connect(self._on_capture_cancelled)
+        self._overlay.start()
+
     def _on_capture_cancelled(self) -> None:
         self._overlay = None
         self._capture_translate = False
         self._capture_long = False
+        self._capture_table = False
+        self._capture_pin = False
 
     def _on_captured(self, image) -> None:
         self._overlay = None
+        if self._capture_pin:
+            # 截图贴图：钉在桌面置顶显示，不进入 OCR 流程
+            self._capture_pin = False
+            self._add_pin(QPixmap.fromImage(image))
+            return
         translate = self._capture_translate
         self._capture_translate = False
+        if self._capture_table:
+            self._capture_table = False
+            self.statusBar().showMessage("表格识别中...")
+            self._table_worker = TableWorker(image)
+            self._table_worker.done.connect(self._on_table_done)
+            self._table_worker.fail.connect(self._on_ocr_fail)
+            self._table_worker.start()
+            return
         self.statusBar().showMessage("识别中...")
         self._worker = OcrWorker(image)
         # 翻译标志在连接时绑定：避免与图片队列识别共用状态导致串扰
         self._worker.done.connect(lambda text, tr=translate: self._on_ocr_done(text, tr))
         self._worker.fail.connect(self._on_ocr_fail)
         self._worker.start()
+
+    def _add_pin(self, pixmap: QPixmap) -> None:
+        """创建一个新的贴图窗口并清理已关闭的旧窗口。"""
+        self._pins = [p for p in self._pins if p.isVisible()]
+        pin = PinWindow(pixmap)
+        pin.setAttribute(Qt.WA_DeleteOnClose)
+        self._pins.append(pin)
+        pin.move(QCursor.pos())
+        pin.show()
+        self.statusBar().showMessage(
+            "贴图已创建：拖动移动 / 滚轮缩放 / Ctrl+滚轮调透明度 / 双击关闭", 5000
+        )
+
+    # ---- PDF 整档识别 ----
+    def _start_pdf_ocr(self) -> None:
+        if not config.OCR_PDF:
+            QMessageBox.information(
+                self, config.APP_NAME, "PDF 识别未开启，请在「设置 → 功能」中勾选。"
+            )
+            return
+        if self._overlay is not None or not self._check_ocr_busy():
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self, "选择要识别的 PDF", "", "PDF 文档 (*.pdf)"
+        )
+        if not path:
+            return
+        self._pdf_ocr_path(path)
+
+    def _on_pdf_progress(self, page: int, total: int) -> None:
+        if self._pdf_dlg is not None:
+            self._pdf_dlg.setMaximum(total)
+            self._pdf_dlg.setValue(page)
+            self._pdf_dlg.setLabelText(f"正在识别第 {page} / {total} 页...")
+
+    def _on_pdf_done(self, text: str) -> None:
+        self._close_pdf_dlg()
+        self._on_ocr_done(text)
+
+    def _on_pdf_fail(self, msg: str) -> None:
+        self._close_pdf_dlg()
+        self.statusBar().clearMessage()
+        QMessageBox.warning(self, config.APP_NAME, f"PDF 识别失败：{msg}")
+
+    def _close_pdf_dlg(self) -> None:
+        if self._pdf_dlg is not None:
+            self._pdf_dlg.reset()
+            self._pdf_dlg.close()
+            self._pdf_dlg = None
+        self.statusBar().clearMessage()
 
     def _on_ocr_done(self, text: str, translate: bool = False) -> None:
         self.statusBar().clearMessage()
@@ -364,6 +549,40 @@ class MainWindow(QMainWindow):
     def _on_ocr_fail(self, msg: str) -> None:
         self.statusBar().clearMessage()
         QMessageBox.warning(self, config.APP_NAME, f"OCR 失败：{msg}")
+
+    # ---- 表格识别 ----
+    def _on_table_done(self, rows: list) -> None:
+        self.statusBar().clearMessage()
+        rows = [r for r in rows if any(str(c).strip() for c in r)]
+        if not rows:
+            self.tray.showMessage(
+                config.APP_NAME, "未识别到表格内容", QSystemTrayIcon.Information, 2000
+            )
+            return
+        tsv = "\n".join("\t".join(str(c) for c in row) for row in rows)
+        self._add_history(tsv)
+        QApplication.clipboard().setText(tsv)
+        default = os.path.join(
+            os.path.expanduser("~"),
+            f"表格识别_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+        )
+        path, _ = QFileDialog.getSaveFileName(
+            self, "保存表格为 Excel", default, "Excel 工作簿 (*.xlsx)"
+        )
+        if path:
+            try:
+                export_xlsx(path, rows)
+                self.tray.showMessage(
+                    config.APP_NAME,
+                    f"表格已导出 {os.path.basename(path)}（内容已复制）",
+                    QSystemTrayIcon.Information, 2500,
+                )
+            except Exception as exc:  # noqa: BLE001
+                QMessageBox.warning(self, config.APP_NAME, f"导出失败：{exc}")
+        else:
+            self.tray.showMessage(
+                config.APP_NAME, "表格内容已复制到剪贴板", QSystemTrayIcon.Information, 2000
+            )
 
     # ---- 长截图 ----
     def _on_region_selected(self, x: int, y: int, w: int, h: int) -> None:
@@ -478,12 +697,28 @@ class MainWindow(QMainWindow):
             f"<b>{config.TRANSLATE_HOTKEY.upper()}</b> 截屏翻译　·　"
             f"<b>{config.HOTKEY_LONG.upper()}</b> 滚动长截图<br>"
             "<span style='color:#555'>"
-            "框选后自动识别 / Esc 取消 / 点「设置」修改快捷键 / 长截图可识别并翻译</span>"
+            "框选后自动识别 / Esc 取消 / 「设置」可改快捷键与识别选项 / "
+            "拖拽图片或 PDF 或文件夹到窗口可批量识别 / 长截图可识别并翻译</span>"
         )
 
     def _open_settings(self) -> None:
         dlg = SettingsDialog(
-            (config.HOTKEY, config.TRANSLATE_HOTKEY, config.HOTKEY_LONG), self
+            (config.HOTKEY, config.TRANSLATE_HOTKEY, config.HOTKEY_LONG),
+            {
+                "lang": config.OCR_LANG,
+                "use_cls": config.OCR_USE_CLS,
+                "enhance": config.OCR_ENHANCE,
+                "para": config.OCR_MERGE_PARA,
+                "qr": config.OCR_QR,
+                "table": config.OCR_TABLE,
+                "gpu": config.OCR_GPU,
+                "filter_kw": config.OCR_FILTER_KW,
+                "filter_keywords": config.OCR_FILTER_KEYWORDS,
+                "pdf": config.OCR_PDF,
+                "pin": config.OCR_PIN,
+                "langs": config.OCR_LANGS,
+            },
+            self,
         )
         if dlg.exec() != QDialog.Accepted:
             return
@@ -494,15 +729,56 @@ class MainWindow(QMainWindow):
         if len({hk, htr, hlong}) != 3:
             QMessageBox.warning(self, config.APP_NAME, "三个快捷键不能相同")
             return
-        self._apply_hotkeys(hk, htr, hlong)
+        opts = dlg.ocr_options()
+        engine_changed = (
+            opts["lang"] != config.OCR_LANG
+            or opts["use_cls"] != config.OCR_USE_CLS
+            or opts["gpu"] != config.OCR_GPU
+        )
+        config.HOTKEY, config.TRANSLATE_HOTKEY, config.HOTKEY_LONG = hk, htr, hlong
+        config.OCR_LANG = opts["lang"]
+        config.OCR_USE_CLS = opts["use_cls"]
+        config.OCR_ENHANCE = opts["enhance"]
+        config.OCR_MERGE_PARA = opts["para"]
+        config.OCR_QR = opts["qr"]
+        config.OCR_TABLE = opts["table"]
+        config.OCR_GPU = opts["gpu"]
+        config.OCR_FILTER_KW = opts["filter_kw"]
+        config.OCR_FILTER_KEYWORDS = opts["filter_keywords"]
+        config.OCR_PDF = opts["pdf"]
+        config.OCR_PIN = opts["pin"]
+        config.save_settings(
+            {
+                "hotkey_capture": hk,
+                "hotkey_translate": htr,
+                "hotkey_long": hlong,
+                "ocr_lang": opts["lang"],
+                "ocr_use_cls": opts["use_cls"],
+                "ocr_enhance": opts["enhance"],
+                "ocr_para": opts["para"],
+                "ocr_qr": opts["qr"],
+                "ocr_table": opts["table"],
+                "ocr_gpu": opts["gpu"],
+                "ocr_filter_kw": opts["filter_kw"],
+                "ocr_filter_keywords": opts["filter_keywords"],
+                "ocr_pdf": opts["pdf"],
+                "ocr_pin": opts["pin"],
+            }
+        )
+        self._reregister_hotkeys_safely()
+        self.tip.setText(self._tip_html())
+        if engine_changed:
+            get_engine().reload()
+            self.statusBar().showMessage("识别设置已更新，引擎已重载", 3000)
+        else:
+            self.statusBar().showMessage("设置已保存", 3000)
 
-    def _apply_hotkeys(self, hk: str, htr: str, hlong: str) -> None:
+    def _reregister_hotkeys_safely(self) -> None:
         """重新注册全局热键；失败自动恢复原设置。"""
         import keyboard
 
         old = (config.HOTKEY, config.TRANSLATE_HOTKEY, config.HOTKEY_LONG)
         keyboard.unhook_all()
-        config.HOTKEY, config.TRANSLATE_HOTKEY, config.HOTKEY_LONG = hk, htr, hlong
         try:
             self._register_hotkey()
         except Exception as exc:  # noqa: BLE001
@@ -512,14 +788,6 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self, config.APP_NAME, f"快捷键注册失败（已恢复原设置）：{exc}"
             )
-            return
-        config.save_settings(
-            {"hotkey_capture": hk, "hotkey_translate": htr, "hotkey_long": hlong}
-        )
-        self.tip.setText(self._tip_html())
-        self.tray.showMessage(
-            config.APP_NAME, "快捷键已更新", QSystemTrayIcon.Information, 2000
-        )
 
     # ---- 历史记录 ----
     def _load_history(self) -> list[dict]:
@@ -558,20 +826,12 @@ class MainWindow(QMainWindow):
             self.list.addItem(it)
         self.list.setUpdatesEnabled(True)
 
-    # ---- 悬浮/双击预览完整内容 ----
-    def _on_item_hovered(self, item: QListWidgetItem) -> None:
-        """鼠标进入条目：约半秒后浮现完整内容（长悬浮）。"""
-        self._hover_item = item
-        rect = self.list.visualItemRect(item)
-        self._hover_pos = self.list.viewport().mapToGlobal(rect.bottomLeft())
-        self._hover_timer.start(500)
-
-    def _on_hover_timeout(self) -> None:
-        if self._hover_item is not None:
-            self._show_preview(self._hover_item, self._hover_pos, 6000)
+    # ---- 单击/双击预览完整内容 ----
+    def _on_item_clicked(self, item: QListWidgetItem) -> None:
+        """单击条目：浮窗预览完整内容（点击触发，不再长悬浮）。"""
+        self._show_preview(item, QCursor.pos(), 8000)
 
     def _on_item_double_clicked(self, item: QListWidgetItem) -> None:
-        self._hover_timer.stop()  # 双击已弹出浮窗，避免悬浮超时再次挪动
         self._copy_selected()
         self._show_preview(item, QCursor.pos(), 8000)
 
@@ -603,7 +863,8 @@ class MainWindow(QMainWindow):
         default = os.path.join(os.path.expanduser("~"), "SnapOCR导出.txt")
         path, _ = QFileDialog.getSaveFileName(
             self, "导出所选记录", default,
-            "文本文件 (*.txt);;Word 文档 (*.docx);;PDF 文档 (*.pdf)",
+            "文本文件 (*.txt);;Word 文档 (*.docx);;PDF 文档 (*.pdf);;"
+            "Markdown (*.md)",
         )
         if not path:
             return
@@ -635,6 +896,88 @@ class MainWindow(QMainWindow):
             self._history.clear()
             self._save_history()
             self._refresh_list()
+
+    # ---- 拖拽图片文件/PDF/文件夹批量识别 ----
+    @staticmethod
+    def _collect_images_from_dir(path: str) -> list[str]:
+        """递归收集文件夹内所有图片（Umi-OCR 批量导入，上限 500 张防误拖大目录）。"""
+        found: list[str] = []
+        for root, _dirs, names in os.walk(path):
+            for n in names:
+                if os.path.splitext(n)[1].lower() in MainWindow.IMAGE_EXTS:
+                    found.append(os.path.join(root, n))
+                    if len(found) >= 500:
+                        return found
+        return found
+
+    def dragEnterEvent(self, event) -> None:  # noqa: N802
+        for url in event.mimeData().urls():
+            path = url.toLocalFile()
+            ext = os.path.splitext(path)[1].lower()
+            if ext in self.IMAGE_EXTS or ext == ".pdf" or os.path.isdir(path):
+                event.acceptProposedAction()
+                return
+
+    def dropEvent(self, event) -> None:  # noqa: N802
+        dirs: list[str] = []
+        pdfs: list[str] = []
+        images: list[str] = []
+        for url in event.mimeData().urls():
+            path = url.toLocalFile()
+            ext = os.path.splitext(path)[1].lower()
+            if os.path.isdir(path):
+                dirs.append(path)
+            elif ext == ".pdf":
+                pdfs.append(path)
+            elif ext in self.IMAGE_EXTS:
+                images.append(path)
+        if not (dirs or pdfs or images):
+            return
+        if not self._check_ocr_busy():
+            return
+        for d in dirs:
+            images.extend(self._collect_images_from_dir(d))
+
+        # 拖入了 PDF：一次识别一个，优先处理 PDF
+        if pdfs:
+            if len(pdfs) > 1:
+                self.statusBar().showMessage("一次只能识别一个 PDF，已取第一个", 4000)
+            self._pdf_ocr_path(pdfs[0])
+            return
+
+        if not images:
+            return
+        payload: list[tuple[str, bytes]] = []
+        for path in images:
+            try:
+                with open(path, "rb") as f:
+                    payload.append((os.path.basename(path), f.read()))
+            except OSError as exc:
+                QMessageBox.warning(self, config.APP_NAME, f"读取失败 {path}：{exc}")
+        if not payload:
+            return
+        self.statusBar().showMessage(f"识别 {len(payload)} 张图片...")
+        self._worker = OcrWorker(files=payload)
+        self._worker.done.connect(self._on_ocr_done)
+        self._worker.fail.connect(self._on_ocr_fail)
+        self._worker.start()
+
+    def _pdf_ocr_path(self, path: str) -> None:
+        """对指定 PDF 启动识别（拖拽与文件对话框共用）。"""
+        if self._overlay is not None or not self._check_ocr_busy():
+            return
+        self.statusBar().showMessage(f"PDF 识别中：{os.path.basename(path)}")
+        self._pdf_dlg = QProgressDialog("正在识别...", "取消", 0, 1, self)
+        self._pdf_dlg.setWindowTitle("PDF 识别")
+        self._pdf_dlg.setMinimumDuration(0)
+        self._pdf_dlg.setMinimumWidth(320)
+        self._pdf_dlg.canceled.connect(lambda: self._pdf_worker and self._pdf_worker.cancel())
+        self._pdf_dlg.show()
+        self._pdf_worker = PdfWorker(path, config.PDF_RENDER_SCALE)
+        self._pdf_worker.progress.connect(self._on_pdf_progress)
+        self._pdf_worker.done.connect(self._on_pdf_done)
+        self._pdf_worker.fail.connect(self._on_pdf_fail)
+        self._pdf_worker.start()
 
     # ---- 窗口/托盘行为 ----
     def _on_tray_activated(self, reason) -> None:
@@ -671,6 +1014,11 @@ class MainWindow(QMainWindow):
                 self._longshot_worker.finished.connect(QApplication.quit)
                 return
         # 等待后台线程结束，避免 ONNX 运行时在进程退出时崩溃
+        if self._pdf_worker is not None and self._pdf_worker.isRunning():
+            self._pdf_worker.cancel()
+        for w in (self._pdf_worker, self._table_worker):
+            if w is not None and w.isRunning():
+                w.wait(10000)
         if self._preload is not None and self._preload.isRunning():
             self._preload.wait(10000)
         if self._worker is not None and self._worker.isRunning():
