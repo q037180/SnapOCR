@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="assets/icon.png" width="128" alt="SnapOCR"/>
+<img src="https://github.com/q037180/SnapOCR/releases/download/v1.0.0/icon.png" width="128" alt="SnapOCR"/>
 
 ## SnapOCR 文字识别工具
 
@@ -23,7 +23,7 @@
 * **灵活**：多语言模型、表格识别、批量识别、PDF 整档识别、翻译、贴图，一个不落。
 * **功能**：截图 OCR / 批量 OCR / PDF 识别 / 表格转 Excel / 二维码 / 截屏翻译 / 长截图 / 贴图
 
-![新功能演示：PDF 识别 / 贴图 / 批量 / 导出](assets/demo-features.gif)
+![新功能演示：PDF 识别 / 贴图 / 批量 / 导出](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo-features.gif)
 
 </div>
 
@@ -55,13 +55,13 @@
 - **二维码**：框选区域没有文字时自动兜底解码二维码
 - **智能排版**：按行还原排版，多栏文本不乱序
 
-![截图识别演示](assets/demo.gif)
+![截图识别演示](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo.gif)
 
 ## 批量识别
 
 Umi-OCR「批量OCR」同款交互：把图片或整个文件夹拖进主窗口，自动加入批量队列（递归收集、去重、上限 500 张），点「开始识别」逐张处理，结果按文件名分组进入历史记录。
 
-![批量识别演示](assets/demo-batch.gif)
+![批量识别演示](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo-batch.gif)
 
 ## PDF 整档识别
 
@@ -71,19 +71,19 @@ Umi-OCR「批量OCR」同款交互：把图片或整个文件夹拖进主窗口�
 
 框选表格区域 → 自动识别为行列矩阵 → 预览可编辑 → 一键保存 Excel（xlsx）。
 
-![表格识别演示](assets/demo-table.gif)
+![表格识别演示](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo-table.gif)
 
 ## 截图贴图
 
 框选后图片钉在桌面置顶显示，可同时钉多张：拖动移动、滚轮缩放、`Ctrl+滚轮` 调透明度、双击或右键关闭。
 
-![截图贴图演示](assets/demo-pin.gif)
+![截图贴图演示](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo-pin.gif)
 
 ## 截屏翻译
 
 热键 `Ctrl+Alt+T` 框选英文段落 → 识别 → 自动弹出翻译窗口得到中文译文。原文可编辑后重译，支持简繁中文、英、日、韩、法、德、西、俄、越、泰 11 种语言互译（必应翻译为主，MyMemory 兜底，免费无需 API Key）。
 
-![截屏翻译演示](assets/preview-translate.gif)
+![截屏翻译演示](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/preview-translate.gif)
 
 ## 长截图
 
@@ -96,7 +96,7 @@ Umi-OCR「批量OCR」同款交互：把图片或整个文件夹拖进主窗口�
 - 内置历史记录，关键词搜索即时过滤；单击条目浮窗预览，双击再次复制
 - 「导出所选...」一键导出 **txt / docx / pdf / md**；表格结果可保存 **xlsx**
 
-![历史预览演示](assets/preview-hover.gif)
+![历史预览演示](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/preview-hover.gif)
 
 ## 全局设置
 
