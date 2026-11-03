@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QProgressDialog,
     QPushButton,
     QSystemTrayIcon,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -196,6 +197,8 @@ class MainWindow(QMainWindow):
         self._longshot_dlg: LongShotDialog | None = None
         self._preview: PreviewPopup | None = None
         self._history: list[dict] = self._load_history()
+        self._batch_files: list[str] = []  # 批量识别待处理队列
+        self._batch_worker: OcrWorker | None = None
 
         self._build_ui()
         self._build_tray()
@@ -210,9 +213,74 @@ class MainWindow(QMainWindow):
             self._preload.start()
 
     # ---- UI ----
+    # Umi-OCR 风格：扁平卡片 + 圆角 + 蓝色主色调，标签页组织功能
+    STYLE = """
+    QTabWidget::pane { border: 1px solid rgba(60,60,60,45); border-radius: 6px;
+        background: rgba(255,255,255,150); top: -1px; }
+    QTabBar::tab { padding: 6px 18px; margin-right: 4px; border-radius: 6px;
+        color: #555; background: transparent; }
+    QTabBar::tab:selected { background: rgba(255,255,255,220); color: #1e6fe8;
+        font-weight: bold; border: 1px solid rgba(60,60,60,45); }
+    QTabBar::tab:hover:!selected { background: rgba(255,255,255,120); }
+    QPushButton { background: rgba(255,255,255,220); border: 1px solid rgba(60,60,60,60);
+        border-radius: 6px; padding: 6px 14px; }
+    QPushButton:hover { border-color: #1e6fe8; color: #1e6fe8; }
+    QLineEdit { background: rgba(255,255,255,210); border: 1px solid rgba(60,60,60,60);
+        border-radius: 6px; padding: 5px 8px; }
+    QListWidget { background: rgba(255,255,255,190); border: 1px solid rgba(60,60,60,50);
+        border-radius: 6px; alternate-background-color: rgba(243,248,255,180); }
+    QListWidget::item { padding: 3px; }
+    QListWidget::item:selected { background: rgba(47,111,237,70); color: #1a1a1a; }
+    QStatusBar { background: rgba(255,255,255,160); color: #666; }
+    """
+
     def _build_ui(self) -> None:
         central = BgCentral(_load_bg())
-        layout = QVBoxLayout(central)
+        outer = QVBoxLayout(central)
+        outer.setContentsMargins(8, 8, 8, 8)
+
+        # Umi-OCR 标签页框架：截图识别 / 批量识别，右上角窗口置顶开关
+        self.tabs = QTabWidget()
+        self.tabs.setDocumentMode(True)
+        self.btn_topmost = QPushButton("置顶")
+        self.btn_topmost.setCheckable(True)
+        self.btn_topmost.setCursor(Qt.PointingHandCursor)
+        self.btn_topmost.setFixedHeight(26)
+        self.btn_topmost.setToolTip("窗口置顶显示（Umi-OCR 同款）")
+        self.btn_topmost.toggled.connect(self._on_topmost_toggled)
+        self.tabs.setCornerWidget(self.btn_topmost, Qt.TopRightCorner)
+        outer.addWidget(self.tabs, 1)
+
+        self.tabs.addTab(self._build_capture_page(), "🔍 截图识别")
+        self._batch_page = self._build_batch_page()
+        self.tabs.addTab(self._batch_page, "📦 批量识别")
+
+        self.setStyleSheet(self.STYLE)
+        self.setCentralWidget(central)
+
+        self.btn_capture.clicked.connect(self.start_capture)
+        self.btn_translate.clicked.connect(lambda: self.start_capture(translate=True))
+        self.btn_long.clicked.connect(lambda: self.start_capture(long=True))
+        self.btn_table.clicked.connect(self._start_table_capture)
+        self.btn_pin.clicked.connect(lambda: self.start_capture(pin=True))
+        self.btn_pdf.clicked.connect(self._start_pdf_ocr)
+        self.btn_settings.clicked.connect(self._open_settings)
+        self.btn_copy.clicked.connect(self._copy_selected)
+        self.btn_export.clicked.connect(self._export_selected)
+        self.btn_delete.clicked.connect(self._delete_selected)
+        self.btn_clear.clicked.connect(self._clear_history)
+        self.list.itemDoubleClicked.connect(self._on_item_double_clicked)
+        # 单击条目浮窗预览完整内容（替代原长悬浮，避免误触发）
+        self.list.itemClicked.connect(self._on_item_clicked)
+        self.btn_batch_add.clicked.connect(self._on_batch_add)
+        self.btn_batch_clear.clicked.connect(self._on_batch_clear)
+        self.btn_batch_start.clicked.connect(self._on_batch_start)
+        self._refresh_list()
+
+    def _build_capture_page(self) -> QWidget:
+        """标签页 1：截图识别（提示 + 功能按钮 + 历史记录）。"""
+        page = QWidget()
+        layout = QVBoxLayout(page)
 
         self.tip = QLabel(self._tip_html())
         self.tip.setWordWrap(True)
@@ -262,34 +330,51 @@ class MainWindow(QMainWindow):
         self.list.setWordWrap(True)
         self.list.setAlternatingRowColors(True)
         layout.addWidget(self.list, 1)
-        self.search.setStyleSheet(
-            "QLineEdit { background: rgba(255,255,255,200);"
-            " border: 1px solid rgba(60,60,60,60); border-radius: 4px; padding: 4px 6px; }"
-        )
-        self.list.setStyleSheet(
-            "QListWidget { background: rgba(255,255,255,185);"
-            " alternate-background-color: rgba(243,248,243,205);"
-            " border: 1px solid rgba(60,60,60,50); border-radius: 4px; }"
-        )
-        self.statusBar().setStyleSheet("QStatusBar { background: rgba(255,255,255,160); }")
+        return page
 
-        self.setCentralWidget(central)
+    def _build_batch_page(self) -> QWidget:
+        """标签页 2：批量识别（Umi-OCR 批量OCR 页：文件队列 + 开始识别）。"""
+        page = QWidget()
+        layout = QVBoxLayout(page)
 
-        self.btn_capture.clicked.connect(self.start_capture)
-        self.btn_translate.clicked.connect(lambda: self.start_capture(translate=True))
-        self.btn_long.clicked.connect(lambda: self.start_capture(long=True))
-        self.btn_table.clicked.connect(self._start_table_capture)
-        self.btn_pin.clicked.connect(lambda: self.start_capture(pin=True))
-        self.btn_pdf.clicked.connect(self._start_pdf_ocr)
-        self.btn_settings.clicked.connect(self._open_settings)
-        self.btn_copy.clicked.connect(self._copy_selected)
-        self.btn_export.clicked.connect(self._export_selected)
-        self.btn_delete.clicked.connect(self._delete_selected)
-        self.btn_clear.clicked.connect(self._clear_history)
-        self.list.itemDoubleClicked.connect(self._on_item_double_clicked)
-        # 单击条目浮窗预览完整内容（替代原长悬浮，避免误触发）
-        self.list.itemClicked.connect(self._on_item_clicked)
-        self._refresh_list()
+        hint = QLabel(
+            "把图片文件或整个文件夹<b>拖进本窗口</b>加入队列（自动递归收集，上限 500 张），"
+            "或点「添加图片...」选择文件；点击「开始识别」逐张识别，结果进入历史记录。"
+        )
+        hint.setWordWrap(True)
+        hint.setTextFormat(Qt.RichText)
+        hint.setStyleSheet(
+            "QLabel { background: rgba(255,255,255,185);"
+            " border: 1px solid rgba(60,60,60,50); border-radius: 6px;"
+            " padding: 8px 10px; }"
+        )
+        layout.addWidget(hint)
+
+        row = QHBoxLayout()
+        self.btn_batch_add = QPushButton("添加图片...")
+        self.btn_batch_start = QPushButton("开始识别")
+        self.btn_batch_start.setStyleSheet("font-weight: bold;")
+        self.btn_batch_clear = QPushButton("清空列表")
+        self.batch_status = QLabel("队列空闲")
+        row.addWidget(self.btn_batch_add)
+        row.addWidget(self.btn_batch_start)
+        row.addWidget(self.btn_batch_clear)
+        row.addStretch(1)
+        row.addWidget(self.batch_status)
+        layout.addLayout(row)
+
+        self.batch_list = QListWidget()
+        self.batch_list.setWordWrap(True)
+        self.batch_list.setAlternatingRowColors(True)
+        self.batch_list.setDragDropMode(QListWidget.DragDropMode.DropOnly)
+        layout.addWidget(self.batch_list, 1)
+        return page
+
+    def _on_topmost_toggled(self, checked: bool) -> None:
+        self.setWindowFlag(Qt.WindowStaysOnTopHint, checked)
+        if self.isVisible():
+            self.show()
+        self.btn_topmost.setText("已置顶" if checked else "置顶")
 
     def _build_tray(self) -> None:
         self.tray = QSystemTrayIcon(make_icon(), self)
@@ -414,6 +499,7 @@ class MainWindow(QMainWindow):
             ("上一次识别", self._worker),
             ("表格识别", self._table_worker),
             ("PDF 识别", self._pdf_worker),
+            ("批量识别", self._batch_worker),
         ):
             if w is not None and w.isRunning():
                 self.statusBar().showMessage(f"{name}进行中，请稍候", 3000)
@@ -698,7 +784,7 @@ class MainWindow(QMainWindow):
             f"<b>{config.HOTKEY_LONG.upper()}</b> 滚动长截图<br>"
             "<span style='color:#555'>"
             "框选后自动识别 / Esc 取消 / 「设置」可改快捷键与识别选项 / "
-            "拖拽图片或 PDF 或文件夹到窗口可批量识别 / 长截图可识别并翻译</span>"
+            "拖拽图片、文件夹到「批量识别」页排队识别 / 拖入 PDF 整档识别 / 长截图可识别并翻译</span>"
         )
 
     def _open_settings(self) -> None:
@@ -919,6 +1005,7 @@ class MainWindow(QMainWindow):
                 return
 
     def dropEvent(self, event) -> None:  # noqa: N802
+        """Umi-OCR 批量OCR 风格：图片/文件夹拖入只加入批量队列；PDF 仍立即识别。"""
         dirs: list[str] = []
         pdfs: list[str] = []
         images: list[str] = []
@@ -933,34 +1020,103 @@ class MainWindow(QMainWindow):
                 images.append(path)
         if not (dirs or pdfs or images):
             return
-        if not self._check_ocr_busy():
-            return
         for d in dirs:
             images.extend(self._collect_images_from_dir(d))
+        if images:
+            self._queue_batch(images)
 
         # 拖入了 PDF：一次识别一个，优先处理 PDF
         if pdfs:
             if len(pdfs) > 1:
                 self.statusBar().showMessage("一次只能识别一个 PDF，已取第一个", 4000)
+            if not self._check_ocr_busy():
+                return
             self._pdf_ocr_path(pdfs[0])
-            return
 
-        if not images:
+    # ---- 批量识别（Umi-OCR 批量OCR 页风格）----
+    def _queue_batch(self, paths: list[str]) -> None:
+        """把图片加入批量队列（去重，上限 500 张）。"""
+        known = set(self._batch_files)
+        added = 0
+        for p in paths:
+            if p not in known and os.path.splitext(p)[1].lower() in self.IMAGE_EXTS:
+                self._batch_files.append(p)
+                known.add(p)
+                added += 1
+            if len(self._batch_files) >= 500:
+                self.statusBar().showMessage("已达批量上限 500 张，超出部分已忽略", 4000)
+                break
+        self._refresh_batch_list()
+        if added:
+            self.tabs.setCurrentWidget(self._batch_page)
+            self.batch_status.setText(f"队列 {len(self._batch_files)} 张，待识别")
+
+    def _refresh_batch_list(self) -> None:
+        self.batch_list.setUpdatesEnabled(False)
+        self.batch_list.clear()
+        for p in self._batch_files:
+            self.batch_list.addItem(p)
+        self.batch_list.setUpdatesEnabled(True)
+
+    def _on_batch_add(self) -> None:
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "添加要识别的图片", "",
+            "图片文件 (%s);;全部文件 (*)"
+            % " ".join("*" + e for e in sorted(self.IMAGE_EXTS)),
+        )
+        if paths:
+            self._queue_batch(paths)
+
+    def _on_batch_clear(self) -> None:
+        if self._batch_worker is not None and self._batch_worker.isRunning():
+            return
+        self._batch_files.clear()
+        self._refresh_batch_list()
+        self.batch_status.setText("队列空闲")
+
+    def _on_batch_start(self) -> None:
+        if not self._batch_files:
+            self.batch_status.setText("队列为空，先拖入图片或点「添加图片...」")
+            return
+        if self._worker is not None and self._worker.isRunning() or (
+            self._batch_worker is not None and self._batch_worker.isRunning()
+        ):
+            self.statusBar().showMessage("识别进行中，请稍候", 3000)
             return
         payload: list[tuple[str, bytes]] = []
-        for path in images:
+        failed: list[str] = []
+        for path in self._batch_files:
             try:
                 with open(path, "rb") as f:
                     payload.append((os.path.basename(path), f.read()))
             except OSError as exc:
-                QMessageBox.warning(self, config.APP_NAME, f"读取失败 {path}：{exc}")
+                failed.append(path)
+                self.batch_status.setText(f"读取失败：{exc}")
         if not payload:
             return
-        self.statusBar().showMessage(f"识别 {len(payload)} 张图片...")
-        self._worker = OcrWorker(files=payload)
-        self._worker.done.connect(self._on_ocr_done)
-        self._worker.fail.connect(self._on_ocr_fail)
-        self._worker.start()
+        self.batch_status.setText(f"批量识别中（{len(payload)} 张）...")
+        self.btn_batch_start.setEnabled(False)
+        self._batch_worker = OcrWorker(files=payload)
+        self._batch_worker.done.connect(self._on_batch_done)
+        self._batch_worker.fail.connect(self._on_batch_fail)
+        self._batch_worker.start()
+        if failed:
+            self._batch_files = [
+                p for p in self._batch_files if p not in failed
+            ]
+            self._refresh_batch_list()
+
+    def _on_batch_done(self, text: str) -> None:
+        self.btn_batch_start.setEnabled(True)
+        self._on_ocr_done(text)
+        self._batch_files.clear()
+        self._refresh_batch_list()
+        self.batch_status.setText("批量识别完成，结果已进入历史记录")
+
+    def _on_batch_fail(self, msg: str) -> None:
+        self.btn_batch_start.setEnabled(True)
+        self.batch_status.setText("批量识别失败")
+        QMessageBox.warning(self, config.APP_NAME, f"OCR 失败：{msg}")
 
     def _pdf_ocr_path(self, path: str) -> None:
         """对指定 PDF 启动识别（拖拽与文件对话框共用）。"""
@@ -1016,7 +1172,7 @@ class MainWindow(QMainWindow):
         # 等待后台线程结束，避免 ONNX 运行时在进程退出时崩溃
         if self._pdf_worker is not None and self._pdf_worker.isRunning():
             self._pdf_worker.cancel()
-        for w in (self._pdf_worker, self._table_worker):
+        for w in (self._pdf_worker, self._table_worker, self._batch_worker):
             if w is not None and w.isRunning():
                 w.wait(10000)
         if self._preload is not None and self._preload.isRunning():
