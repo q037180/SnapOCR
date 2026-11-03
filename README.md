@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="assets/icon.svg" width="128" alt="SnapOCR"/>
+<img src="assets/icon.png" width="128" alt="SnapOCR"/>
 
 ## SnapOCR 文字识别工具
 
