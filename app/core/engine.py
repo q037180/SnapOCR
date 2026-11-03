@@ -10,7 +10,9 @@
 """
 from __future__ import annotations
 
+import os
 import re
+import shutil
 import threading
 
 from app import config
@@ -119,6 +121,30 @@ def _gpu_params() -> dict:
     return {}
 
 
+def _seed_models(models_dir: str) -> None:
+    """首次运行把包内自带的模型复制到用户数据目录。
+
+    打包 exe 后 rapidocr 包目录位于临时解压目录，模型存那里会在退出时丢失；
+    复制到 %APPDATA% 后持久可用，且后续语言模型下载也落在这里。
+    开发环境下等价于把 site-packages 内已下载的模型同步过来。
+    """
+    try:
+        import rapidocr as _rp
+
+        src = os.path.join(os.path.dirname(_rp.__file__), "models")
+        if not os.path.isdir(src):
+            return
+        os.makedirs(models_dir, exist_ok=True)
+        for name in os.listdir(src):
+            if not name.endswith(".onnx"):
+                continue
+            dst = os.path.join(models_dir, name)
+            if not os.path.exists(dst):
+                shutil.copyfile(os.path.join(src, name), dst)
+    except Exception:  # noqa: BLE001 复制失败则回落到运行时自动下载
+        pass
+
+
 # 引擎初始化锁：保证 RapidOCR 全局只被初始化一次
 _LOAD_LOCK = threading.Lock()
 
@@ -155,7 +181,12 @@ class OCREngine:
                     # 全屏 1080p 实测 16s → 7.3s（约 2 倍提速），文本召回基本无损；
                     # 框选小区域（最长边 < 960）不受影响。识别(rec)仍从原图裁剪，清晰度不变。
                     # Global.max_side_len 放宽到 4096：避免预处理整体缩图，小字不糊。
+                    models_dir = os.path.join(config.DATA_DIR, "models")
+                    _seed_models(models_dir)
                     params = {
+                        # 模型缓存放到用户数据目录：开发环境和打包 exe 中都持久化，
+                        # 避免 PyInstaller 临时目录导致每次启动重新下载模型
+                        "Global.model_root_dir": models_dir,
                         "Global.max_side_len": 4096,
                         "Global.use_cls": use_cls,
                         "Det.limit_type": "max",

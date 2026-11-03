@@ -112,6 +112,12 @@ Umi-OCR「批量OCR」同款交互：把图片或整个文件夹拖进主窗口�
 
 ## 安装
 
+### 方式一：下载 exe（推荐，免安装）
+
+到 [Releases](https://github.com/q037180/SnapOCR/releases) 下载 `SnapOCR.exe`，双击即用——无需安装 Python，内置中文模型，完全离线。
+
+### 方式二：从源码运行
+
 ```bash
 pip install -r requirements.txt
 python entry.py

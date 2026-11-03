@@ -10,6 +10,7 @@ venv/
 build/
 dist/
 *.spec
+!SnapOCR.spec
 
 # 运行时生成的模型缓存
 models/
