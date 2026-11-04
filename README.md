@@ -1,4 +1,4 @@
-[中文] · [English](#snapocr--offline-screenshot-ocr)
+[中文] · [English](#snapocr--offline-screenshot-ocr-for-dark-ui)
 
 <div align="center">
 
@@ -10,27 +10,37 @@
 [![stars](https://img.shields.io/github/stars/q037180/SnapOCR?style=flat-square)](https://github.com/q037180/SnapOCR/stargazers)
 [![forks](https://img.shields.io/github/forks/q037180/SnapOCR?style=flat-square)](https://github.com/q037180/SnapOCR/forks)
 [![issues](https://img.shields.io/github/issues/q037180/SnapOCR?style=flat-square)](https://github.com/q037180/SnapOCR/issues)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue?style=flat-square)](#跨平台兼容性)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue?style=flat-square)](#跨平台兼容性)
 
-### [使用说明](#目录) · [安装](#安装) · [打包发布](#打包为单文件-exe) · [提交 Bug](https://github.com/q037180/SnapOCR/issues)
+### [使用说明](#目录) · [安装](#安装) · [提交 Bug](https://github.com/q037180/SnapOCR/issues)
 
-**免费，开源，完全离线的截图 OCR 工具**
-适用于 Windows 10/11 x64 · Linux x64 · macOS
+**截屏取字只按一次热键；识别过的内容，随时能搜回来。**
 
-* **免费**：本项目所有代码开源，MIT 协议，完全免费。
-* **离线**：OCR 引擎与语言模型全部本地运行，不上传任何数据。
-* **高效**：基于 RapidOCR（PP-OCRv6 模型），1080p 全屏识别约 7 秒，框选小区域秒出。
-* **灵活**：多语言模型、表格识别、批量识别、PDF 整档识别、翻译、贴图，一个不落。
-* **功能**：截图 OCR / 批量 OCR / PDF 识别 / 表格转 Excel / 二维码 / 截屏翻译 / 长截图 / 贴图
+免费 · 开源（MIT）· 识别全程本地离线，不上传任何截图
 
-![新功能演示：PDF 识别 / 贴图 / 批量 / 导出](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo-features.gif)
+![截图识别演示：按热键框选，松开即复制到剪贴板](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo.gif)
 
 </div>
 
+## 什么时候该用 SnapOCR
+
+系统自带 OCR 已经能应付白底黑字的常规截图。SnapOCR 做的是那些**自带工具容易失手**的时刻：
+
+1. **深色 IDE / 深色网页截图**：深色背景配浅色字，检测模型容易漏检。SnapOCR 会先判断整体亮度，自动反色，再对低对比度区域做 CLAHE 增强，最后才送去识别 —— 代码、报错栈、暗色文档，框完就能复制，不用手工反色。
+2. **识别结果要回头找**：剪贴板只记得最后一次，SnapOCR 记得每一次。所有结果自动进历史，关键词即时过滤、悬停浮窗预览、双击再次复制，还能一键导出 txt / docx / pdf / md / xlsx。
+3. **一整页 / 一整批**：滚动长截图拼接、PDF 逐页识别、文件夹拖入批量队列，配合表格转 Excel 与截屏翻译，一次做完，不用在几个工具之间来回倒。
+
+![历史搜索演示：识别结果随时搜回来](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/preview-hover.gif)
+
+> 想一次看完 15 秒串联演示（截图识别 → 历史搜索 → 导出）：[hero-15s.gif](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/hero-15s.gif)
+
+---
+
 ## 目录
 
+* [什么时候该用 SnapOCR](#什么时候该用-snapocr)
 * [截图识别](#截图识别) — 热键框选、图像增强、段落合并、二维码
-* [批量识别](#批量识别) — 拖入文件夹排队识别（Umi-OCR 批量OCR 同款）
+* [批量识别](#批量识别) — 拖入文件夹排队识别，结果可搜索
 * [PDF 整档识别](#pdf-整档识别) — 逐页渲染识别、进度可取消
 * [表格识别](#表格识别) — 识别为行列矩阵，导出 Excel
 * [截图贴图](#截图贴图) — 钉在桌面置顶，缩放调透明度
@@ -43,14 +53,16 @@
 * [项目结构](#项目结构)
 * [开发计划](#开发计划)
 
+![功能总览：PDF 识别 / 贴图 / 批量 / 导出](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo-features.gif)
+
 ---
 
 ## 截图识别
 
 按全局热键 `Ctrl+Alt+Q`（可改键）框选屏幕任意区域，松开即识别并复制到剪贴板：
 
+- **深色截图增强**：深色主题截图自动反色，低对比度文本再用 CLAHE 提对比，深色 IDE / 暗色网页的识别率显著提升
 - **多语言**：简中 / 繁中 / 英 / 日 / 韩 5 种模型内置，离线即用
-- **图像增强**：深色主题截图自动反色、低对比度文本 CLAHE 增强，深色 IDE 识别率显著提升
 - **段落合并**：多行文本自动合并为自然段；中文智能排版去除字间多余空格
 - **二维码**：框选区域没有文字时自动兜底解码二维码
 - **智能排版**：按行还原排版，多栏文本不乱序
@@ -59,7 +71,7 @@
 
 ## 批量识别
 
-Umi-OCR「批量OCR」同款交互：把图片或整个文件夹拖进主窗口，自动加入批量队列（递归收集、去重、上限 500 张），点「开始识别」逐张处理，结果按文件名分组进入历史记录。
+把图片或整个文件夹拖进主窗口，自动加入批量队列（递归收集、去重、上限 500 张），点「开始识别」逐张处理，结果按文件名分组进入历史记录，之后可以按关键词搜回来。
 
 ![批量识别演示](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo-batch.gif)
 
@@ -112,29 +124,50 @@ Umi-OCR「批量OCR」同款交互：把图片或整个文件夹拖进主窗口�
 
 ## 安装
 
-### 方式一：下载 exe（推荐，免安装）
+> **目前只有 Windows 10/11 x64 提供可直接运行的二进制。** Linux / macOS 需要从源码运行，且部分功能受限，详见[跨平台兼容性](#跨平台兼容性)。
 
-到 [Releases](https://github.com/q037180/SnapOCR/releases) 下载 `SnapOCR.exe`，双击即用——无需安装 Python，内置中文模型，完全离线。
+### 方式一：7z 绿色包（推荐）
 
-### 方式二：从源码运行
+到 [Releases](https://github.com/q037180/SnapOCR/releases) 下载 `SnapOCR-v1.0.0-win64.7z`，解压得到 `SnapOCR/` 文件夹，进入后双击 `SnapOCR.exe` 即用。无需安装、不写注册表、删除文件夹即卸载，模型已内置，完全离线。
+
+绿色包是 **onedir 结构**（主程序 + 依赖目录），**启动明显更快**：单文件 exe 每次运行都要把 160 MB 自解压到临时目录，绿色包解压一次之后就不再做这一步。用同页的 `.sha256` 文件可校验完整性：
+
+```powershell
+Get-FileHash .\SnapOCR-v1.0.0-win64.7z -Algorithm SHA256
+```
+
+### 方式二：单文件 exe
+
+下载 `SnapOCR.exe`，双击即用——无需安装 Python，内置中文模型，完全离线。
+
+> **关于 SmartScreen 提示**：本程序暂未做代码签名，首次运行时 Windows 可能弹出「Windows 已保护你的电脑」（绿色包同样如此）。这是未签名开源程序的正常提示，点「更多信息」→「仍要运行」即可。建议先核对 Release 页的 SHA-256 校验值再运行。如果介意，请从源码自行构建。
+
+### 方式三：从源码运行
 
 ```bash
 pip install -r requirements.txt
 python entry.py
 ```
 
-- 环境要求：Python 3.9+；Windows 10/11（完整支持），Linux / macOS 大部分功能可用
+- 环境要求：Python 3.9+；Windows 10/11 完整支持，Linux / macOS 部分功能可用
 - 首次运行无需联网下载模型，开箱即用
+- 想自己打包单文件版：`pyinstaller SnapOCR.spec --noconfirm`
+- 想自己打包绿色版：`pyinstaller SnapOCR-portable.spec --noconfirm --workpath build/portable --distpath dist`，再运行 `python tools/make_portable_7z.py`
+
+性能参考：基于 RapidOCR（PP-OCRv6 模型），1080p 全屏识别约 7 秒，框选小区域秒出。
 
 ## 跨平台兼容性
 
+**先说清楚现状：Releases 里只有 Windows 二进制。** 源码在 Linux / macOS 上可运行，但全局热键与长截图需要额外权限或依赖 Win32，实际体验以 Windows 为准。
+
 | 功能 | Windows | Linux | macOS |
 | --- | --- | --- | --- |
-| 截图识别 / 翻译 / 历史 / 批量识别 | ✅ | ✅ | ✅ |
-| PDF 整档识别 / 表格 / 贴图 / 导出 | ✅ | ✅ | ✅ |
+| 截图识别 / 翻译 / 历史 / 批量识别 | ✅ | ✅ 源码运行 | ✅ 源码运行 |
+| PDF 整档识别 / 表格 / 贴图 / 导出 | ✅ | ✅ 源码运行 | ✅ 源码运行 |
 | 全局热键 | ✅ | ⚠️ 需 sudo 运行，失败时自动降级为按钮/托盘触发 | ⚠️ 需在 系统设置→隐私与安全→辅助功能 授权 |
 | 长截图自动滚动 | ✅ | ❌ 启动时提示（依赖 Win32 滚轮注入） | ❌ 同左 |
 | GPU 加速 | CUDA / DirectML | CUDA（onnxruntime-gpu） | CPU（可装 onnxruntime-coreml） |
+| 官方二进制 | ✅ | ❌ | ❌ |
 
 在目标平台上运行自检脚本即可确认：
 
@@ -166,9 +199,15 @@ SnapOCR/
 │     ├─ preview_popup.py # 历史条目浮窗预览
 │     ├─ settings_dialog.py  # 侧边栏设置页
 │     └─ translate_dialog.py # 翻译窗口
-├─ assets/                # 演示 GIF 与图标
-├─ tests/platform_check.py   # 跨平台自检脚本
-├─ tools/make_demo_gif.py    # 演示 GIF 自动生成脚本
+├─ assets/                   # 演示 GIF、图标与投稿对比图
+├─ launch/                   # 首发投稿短文与发布清单
+├─ tests/platform_check.py   # 平台自检脚本
+├─ tools/make_demo_gif.py       # 功能演示 GIF
+├─ tools/make_compare_image.py  # 深色截图增强对比图
+├─ tools/make_hero_gif.py       # 15 秒串联演示
+├─ tools/make_portable_7z.py    # 绿色包打包 + SHA256
+├─ SnapOCR.spec              # 单文件 exe 打包配置
+├─ SnapOCR-portable.spec     # onedir 绿色版打包配置
 └─ requirements.txt
 ```
 
@@ -180,17 +219,18 @@ SnapOCR/
 - [x] 图像增强 / 段落合并 / 水印过滤
 - [x] 表格识别导出 Excel
 - [x] PDF 整档识别（进度可取消）
-- [x] 截图贴图（Umi-OCR 同款）
-- [x] 批量识别页（Umi-OCR 批量OCR 同款交互）
+- [x] 截图贴图
+- [x] 批量识别页与可搜索历史
 - [x] Markdown 导出
 - [x] 截屏翻译 / 长截图 / 二维码
-- [x] Linux / macOS 兼容
+- [x] Linux / macOS 源码级兼容
 
 远期计划：
 
 - [ ] 多显示器支持
 - [ ] NPU / OpenVINO 加速
 - [ ] 公式识别
+- [ ] macOS / Linux 官方二进制与代码签名
 
 ## 隐私
 
@@ -200,14 +240,94 @@ OCR 识别不联网、不上传，全部在本机完成。仅当使用翻译功�
 
 [MIT](LICENSE)
 
-## SnapOCR — Offline Screenshot OCR
+---
 
-Press one hotkey, drag a box anywhere on screen, and the text is recognized and copied to your clipboard. **Runs fully offline.**
+## SnapOCR — offline screenshot OCR for dark UI
 
-- Multi-language models (zh-CN / zh-TW / EN / JA / KO) bundled
-- Batch OCR page (Umi-OCR style queue), whole-PDF OCR, table → Excel, pinned captures, screen translation, scrolling long-shot, export to txt/docx/pdf/md/xlsx
+SnapOCR is a free, MIT-licensed desktop app for Windows that turns any on-screen region into copyable text with a single hotkey. Recognition runs **fully offline** using bundled RapidOCR / PP-OCRv6 models — your screenshots never leave the machine.
+
+> Looking for Chinese documentation? See the [中文说明](#目录) above. This section is a standalone English readme.
+
+### Why another screenshot OCR tool?
+
+Built-in OCR (Windows Snipping Tool, PowerToys Text Extractor, macOS Live Text) handles white pages with black text well. SnapOCR targets the cases they tend to miss:
+
+1. **Dark IDEs and dark-mode pages.** Most detection models assume black text on a light background. SnapOCR measures overall brightness, automatically inverts dark captures, and applies CLAHE contrast enhancement on low-contrast regions *before* recognition. Code snippets, stack traces and dark documentation become copyable without manual preprocessing.
+2. **Results you can find again.** The clipboard remembers one item; SnapOCR remembers all of them. Every recognition lands in a searchable history with hover preview, double-click to re-copy, and export to txt / docx / pdf / md / xlsx.
+3. **Whole pages, not just one box.** Scrolling long-shot stitching, page-by-page PDF OCR, drag-a-folder batch queues, table → Excel and screen translation are all included.
+
+### At a glance
+
+- Hotkeys: `Ctrl+Alt+Q` capture · `Ctrl+Alt+T` translate · `Ctrl+Alt+L` long shot (all rebindable)
+- 5 bundled language models: Simplified Chinese, Traditional Chinese, English, Japanese, Korean
+- Dark-capture inversion, CLAHE enhancement, small-region upscaling, paragraph merging, CJK spacing cleanup, watermark keyword filtering
+- QR code fallback when a selected region contains no text
+- Batch queue (folder drag-in, dedupe, up to 500 images), whole-PDF OCR with cancellable progress
+- Table → editable grid → `.xlsx`; pinned always-on-top captures; 11-language screen translation
+- Export: `.txt` / `.docx` / `.pdf` / `.md` / `.xlsx`
+- Performance reference: ~7 s for a full 1080p screen on CPU; small regions are near-instant
+
+![Capture demo](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo.gif)
+
+![Searchable history](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/preview-hover.gif)
+
+### Install (Windows 10/11 x64)
+
+1. Go to [Releases](https://github.com/q037180/SnapOCR/releases).
+2. Download `SnapOCR-v1.0.0-win64.7z` (**recommended**) and unzip anywhere; or download the single-file `SnapOCR.exe`.
+3. Open the unzipped `SnapOCR/` folder and run `SnapOCR.exe`. No Python, no installer, no admin rights, no model downloads. To uninstall, delete the folder.
+
+The 7z build uses a normal **onedir** layout (main exe + dependency folder). Unlike the single-file exe, which self-extracts 160 MB into a temp directory on every launch, it starts directly after one unzip.
+
+Verify the archive with the `.sha256` file on the release page:
+
+```powershell
+Get-FileHash .\SnapOCR-v1.0.0-win64.7z -Algorithm SHA256
+```
+
+> **SmartScreen notice:** the binary is not code-signed yet. Windows may show "Windows protected your PC" on first run. Choose **More info → Run anyway**, ideally after checking the SHA-256. This is expected for an unsigned independent open-source build; building from source is always an option.
+
+### From source
 
 ```bash
 pip install -r requirements.txt
 python entry.py
+# optional: check platform-specific limitations
+python tests/platform_check.py
+# optional: build a single-file exe
+pyinstaller SnapOCR.spec --noconfirm
 ```
+
+Requires Python 3.9+. Models are bundled, so no network access is needed at first run.
+
+### Platform support
+
+**Only Windows has an official binary.** Linux and macOS work from source, with these caveats:
+
+| Feature | Windows | Linux | macOS |
+| --- | --- | --- | --- |
+| OCR / translation / history / batch / PDF / table / pin / export | Yes | From source | From source |
+| Global hotkeys | Yes | Needs `sudo`; falls back to tray/buttons | Needs Accessibility permission |
+| Scrolling long shot | Yes | No (Win32 wheel injection) | No |
+| Official binary | Yes | No | No |
+
+Missing hotkeys or long-shot support never crashes the app — the GUI buttons and tray menu keep working.
+
+### Privacy
+
+OCR is entirely local: no upload, no telemetry, no account. **The only exception is screen translation**, which sends the recognized text to Bing Translator / MyMemory public endpoints. Translators can be disabled in settings.
+
+### Known limitations
+
+- Fixed page headers may repeat in stitched long shots; animated/video areas can misalign.
+- A 160 MB single-file exe unpacks on every launch — the onedir 7z build starts directly and is the recommended download.
+- No automatic updater yet; check Releases for new versions.
+- Multi-monitor handling and formula recognition are on the roadmap.
+
+### Contributing & feedback
+
+Bug reports, feature requests and OCR accuracy samples are welcome in [Issues](https://github.com/q037180/SnapOCR/issues). If a screenshot is misrecognized, attaching the original crop (with sensitive data removed) plus the expected text is the most useful report you can file.
+
+### License
+
+[MIT](LICENSE) — free for personal and commercial use.

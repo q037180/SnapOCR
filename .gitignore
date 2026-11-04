@@ -11,6 +11,7 @@ build/
 dist/
 *.spec
 !SnapOCR.spec
+!SnapOCR-portable.spec
 
 # 运行时生成的模型缓存
 models/
@@ -20,6 +21,7 @@ models/
 .idea/
 .vscode/
 .trae-html-share-packages/
+.workbuddy/
 
 # 系统文件
 Thumbs.db
