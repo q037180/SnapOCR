@@ -14,6 +14,7 @@
 | CI 发版链路 | 已补齐：`3235c95` 起同时构建单文件 exe 与 7z 绿色包，上传 exe + 7z + 2 个 `.sha256` |
 | 本地 / 远端 | 已对齐，`HEAD == origin/main == 3235c95`，工作区干净；本机 `git push` 已可直接运行 |
 | **§2 实际发帖** | **仍是 0，这是唯一剩下的动作** |
+| 网络可达性（21:30 实测） | `v2ex.com`（全站）、Hacker News、Reddit 当前网络不通；掘金、知乎、小众软件、少数派、吾爱破解、博客园、GitHub 全部 200。**首发改掘金**，见 `READY-TO-POST.md` §1 |
 
 不要再补物料、不要再改 README、不要再加功能。定稿见 [`READY-TO-POST.md`](READY-TO-POST.md)：复制 → 粘贴 → 发布。
 
@@ -50,12 +51,13 @@ Offline screenshot OCR for dark IDEs and dark-mode pages — auto-inverts dark c
 
 | 顺序 | 平台 / 入口 | 用哪份稿 | 时间 | 备注 |
 | --- | --- | --- | --- | --- |
-| **D1（今晚）** | V2EX → 「分享创造」节点 | **`READY-TO-POST.md` §1 终稿** | 20:00–22:00 | 第一人称，链接只留仓库 + Releases；发完守 2 小时回评论 |
+| **D1（今晚）** | 掘金 → 写文章 | **`READY-TO-POST.md` §1 Markdown 稿** | 21:00–22:00 | 当前网络可达、发文即发布；标题痛点前置，发完守 1–2 小时回评论 |
+| D1-备用 | V2EX → 「分享创造」节点 | `READY-TO-POST.md` §1-备用 终稿 | 网络恢复后 | 原首选渠道、受众最契合；稿子已备好，能打开时直接发 |
 | D2 | 小众软件投稿 | `READY-TO-POST.md` §2 的 300 字稿 + 3 图 | 白天 | 按「名称 / 平台 / 体积 / 授权 / 官网」列字段 |
 | D4 | 知乎（回答已有 OCR 相关问题） | `READY-TO-POST.md` §3 | 晚上 | 先正经答题，工具介绍放后半，避免软文判定 |
 | D5 | 公众号 | `post-zh.md` + 15s GIF 转 MP4 | — | 「两个痛点 + 一张对比图 + 下载方式」 |
-| D7 | Hacker News → Show HN | `READY-TO-POST.md` §4 + `post-en.md` 正文 | 北京时间 21:00–23:00 | 标题前缀必须 `Show HN: `；发完守 2 小时 |
-| D9 | Reddit r/Windows、r/opensource | `post-en.md` Reddit 版 | 隔天分开发 | 先读各版 self-promotion 规则，有的要求周帖/开发者 flair |
+| 暂缓（网络不通） | Hacker News → Show HN | `READY-TO-POST.md` §4 + `post-en.md` 正文 | 北京时间 21:00–23:00 | 标题前缀必须 `Show HN: `；需先解决网络 |
+| 暂缓（网络不通） | Reddit r/Windows、r/opensource | `post-en.md` Reddit 版 | 隔天分开发 | 需先解决网络，并读各版 self-promotion 规则 |
 | D11 | B站动态 / 短视频 | hero-15s.gif 转视频加字幕 | — | 简介放仓库链接，评论区别关 |
 
 **节奏**：中文社区先发（反馈快、能改），中间留 1–2 天根据反馈修 README / 修 bug，再发英文社区。一次只发一个主渠道。
