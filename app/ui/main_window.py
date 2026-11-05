@@ -562,7 +562,16 @@ class MainWindow(QMainWindow):
 
     def _add_pin(self, pixmap: QPixmap) -> None:
         """创建一个新的贴图窗口并清理已关闭的旧窗口。"""
-        self._pins = [p for p in self._pins if p.isVisible()]
+        alive: list[PinWindow] = []
+        for p in self._pins:
+            try:
+                if p.isVisible():
+                    alive.append(p)
+            except RuntimeError:
+                # 贴图窗口带 WA_DeleteOnClose，关闭后 C++ 对象已销毁，
+                # 残留的 Python 包装对象再调 isVisible() 会抛 RuntimeError
+                continue
+        self._pins = alive
         pin = PinWindow(pixmap)
         pin.setAttribute(Qt.WA_DeleteOnClose)
         self._pins.append(pin)
