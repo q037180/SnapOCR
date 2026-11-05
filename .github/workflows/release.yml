@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag used in archive names (e.g. v1.0.1)'
+        required: false
+        default: 'v1.0.0'
 
 permissions:
   contents: write
@@ -20,27 +25,66 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt pyinstaller
+        run: pip install -r requirements.txt pyinstaller py7zr
 
-      # Use the repo spec instead of a bare pyinstaller call. The spec bundles
-      # app/assets and RapidOCR data files, and filters stale top-level VC/ICU
-      # DLLs that otherwise break Qt6Core on some hosts. It also emits the
-      # single-file dist/SnapOCR.exe expected by the steps below.
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = "${{ github.event.inputs.version }}"
+          if ("${{ github.ref_type }}" -eq "tag") { $v = "${{ github.ref_name }}" }
+          if (-not $v) { $v = "v1.0.0" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          echo "Building version $v"
+
+      # Both builds use the repo specs. The specs bundle app/assets and
+      # RapidOCR data files, and filter stale top-level VC/ICU DLLs that
+      # otherwise break Qt6Core on some hosts.
       - name: Build single-file exe
         run: pyinstaller SnapOCR.spec --noconfirm
 
-      - name: Verify artifact exists
-        run: python -c "import os,sys; p='dist/SnapOCR.exe'; print(p, os.path.getsize(p) if os.path.isfile(p) else 'MISSING'); sys.exit(0 if os.path.isfile(p) else 1)"
+      # Separate workpath so the two PyInstaller builds do not clobber
+      # each other. Output: dist/SnapOCR/ (exe + _internal).
+      - name: Build portable onedir
+        run: pyinstaller SnapOCR-portable.spec --noconfirm --workpath build/portable --distpath dist
+
+      - name: Pack portable 7z and write checksums
+        env:
+          SNAP_OCR_VERSION: ${{ steps.ver.outputs.version }}
+        run: python tools/make_portable_7z.py
+
+      - name: Verify artifacts
+        shell: pwsh
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          $paths = @(
+            "dist/SnapOCR.exe",
+            "dist/SnapOCR-$v-win64.7z",
+            "dist/SnapOCR.exe.sha256",
+            "dist/SnapOCR-$v-win64.7z.sha256"
+          )
+          foreach ($p in $paths) {
+            if (-not (Test-Path $p)) { throw "Missing build output: $p" }
+            $f = Get-Item $p
+            if ($f.Length -lt 100) { throw "Suspiciously small: $p" }
+            "{0}  {1} bytes" -f $p, $f.Length
+          }
 
       - uses: actions/upload-artifact@v4
         with:
           name: SnapOCR-windows-x64
-          path: dist/SnapOCR.exe
+          path: |
+            dist/SnapOCR.exe
+            dist/*.7z
+            dist/*.sha256
 
       # Release notes are maintained by hand; auto-generation would overwrite them.
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/SnapOCR.exe
+          files: |
+            dist/SnapOCR.exe
+            dist/*.7z
+            dist/*.sha256
           generate_release_notes: false

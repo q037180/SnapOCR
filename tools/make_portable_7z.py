@@ -5,9 +5,9 @@
 不是单文件 exe：解压一次后启动不再自解压 160 MB，冷启动明显更快。
 
 运行：venv/Scripts/python.exe tools/make_portable_7z.py
-输出：
-  dist/SnapOCR-v1.0.0-win64.7z
-  dist/SnapOCR-v1.0.0-win64.7z.sha256
+输出（版本号取自环境变量 SNAP_OCR_VERSION，默认 v1.0.0）：
+  dist/SnapOCR-<version>-win64.7z
+  dist/SnapOCR-<version>-win64.7z.sha256
   dist/SnapOCR.exe.sha256
 """
 from __future__ import annotations
@@ -22,15 +22,19 @@ DIST = os.path.join(ROOT, "dist")
 EXE = os.path.join(DIST, "SnapOCR.exe")  # 单文件版，仅用于附带生成校验值
 PORTABLE_DIR = os.path.join(DIST, "SnapOCR")  # PyInstaller onedir 产物
 PORTABLE_EXE = os.path.join(PORTABLE_DIR, "SnapOCR.exe")
-ARCHIVE = os.path.join(DIST, "SnapOCR-v1.0.0-win64.7z")
+VERSION = os.environ.get("SNAP_OCR_VERSION", "v1.0.0").strip() or "v1.0.0"
+ARCHIVE = os.path.join(DIST, f"SnapOCR-{VERSION}-win64.7z")
 NOTE = os.path.join(DIST, "使用说明.txt")
 PRESET = 7  # LZMA2 字典更大，对内置 ONNX 模型更有效；打包慢一些但下载体积更小
 
-NOTE_TEXT = """SnapOCR v1.0.0 · Windows 10/11 x64 绿色版（onedir）
+NOTE_TEXT = f"""SnapOCR {VERSION} · Windows 10/11 x64 绿色版（onedir）
 ====================================================
 
 1. 解压后进入 SnapOCR 文件夹，双击 SnapOCR.exe 即可运行。
-   无需安装、无需 Python、无需联网；识别模型已内置，OCR 全程离线。
+   无需安装、无需 Python、不写注册表；内置简体中文识别模型，
+   默认识别全程在本机离线完成。首次切换到繁中 / 英 / 日 / 韩时，
+   会联网下载对应识别模型（只下载、不上传任何截图或识别文本），
+   缓存到 %APPDATA%\\SnapOCR\\models\\，之后离线可用。
    本版本为 onedir 结构（主程序 + _internal 依赖目录），
    请勿把 exe 单独拷贝出来使用；整个文件夹一起移动即可。
 
@@ -41,7 +45,9 @@ NOTE_TEXT = """SnapOCR v1.0.0 · Windows 10/11 x64 绿色版（onedir）
 3. 全局热键：Ctrl+Alt+Q 截图识别 / Ctrl+Alt+T 截屏翻译 / Ctrl+Alt+L 长截图
    热键可在「设置」里改；托盘菜单与窗口按钮同样可用。
 
-4. 只有「截屏翻译」会联网（必应翻译 / MyMemory），OCR 本身不联网。
+4. 会联网的只有两处：首次切换到非简体中文语言时下载识别模型；
+   以及「截屏翻译」把识别出的文本发给必应翻译 / MyMemory（可在设置里关闭）。
+   OCR 识别本身不联网、不上传。
 
 5. 卸载：直接删除本文件夹。
    个人配置位于 %APPDATA%\\SnapOCR\\settings.json，需要时一并删除。
