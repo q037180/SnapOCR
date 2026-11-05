@@ -57,17 +57,25 @@ jobs:
         shell: pwsh
         run: |
           $v = "${{ steps.ver.outputs.version }}"
-          $paths = @(
+          $big = @(
             "dist/SnapOCR.exe",
-            "dist/SnapOCR-$v-win64.7z",
+            "dist/SnapOCR-$v-win64.7z"
+          )
+          $sums = @(
             "dist/SnapOCR.exe.sha256",
             "dist/SnapOCR-$v-win64.7z.sha256"
           )
-          foreach ($p in $paths) {
+          foreach ($p in $big) {
             if (-not (Test-Path $p)) { throw "Missing build output: $p" }
             $f = Get-Item $p
-            if ($f.Length -lt 100) { throw "Suspiciously small: $p" }
+            if ($f.Length -lt 1MB) { throw "Suspiciously small: $p" }
             "{0}  {1} bytes" -f $p, $f.Length
+          }
+          foreach ($p in $sums) {
+            if (-not (Test-Path $p)) { throw "Missing checksum: $p" }
+            $line = (Get-Content $p -Raw).Trim()
+            if ($line -notmatch '^[0-9a-f]{64}\s+\S+$') { throw "Bad checksum format: $p" }
+            "{0}  {1}" -f $p, $line
           }
 
       - uses: actions/upload-artifact@v4
