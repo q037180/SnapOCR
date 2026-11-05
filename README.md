@@ -16,7 +16,7 @@
 
 **截屏取字只按一次热键；识别过的内容，随时能搜回来。**
 
-免费 · 开源（MIT）· 识别全程本地离线，不上传任何截图
+免费 · 开源（MIT）· 识别在本机完成，不上传任何截图
 
 ![截图识别演示：按热键框选，松开即复制到剪贴板](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo.gif)
 
@@ -62,7 +62,7 @@
 按全局热键 `Ctrl+Alt+Q`（可改键）框选屏幕任意区域，松开即识别并复制到剪贴板：
 
 - **深色截图增强**：深色主题截图自动反色，低对比度文本再用 CLAHE 提对比，深色 IDE / 暗色网页的识别率显著提升
-- **多语言**：简中 / 繁中 / 英 / 日 / 韩 5 种模型内置，离线即用
+- **多语言**：内置简体中文模型，离线即用；繁中 / 英 / 日 / 韩首次切换时会联网下载对应识别模型，下载后本地缓存、之后离线
 - **段落合并**：多行文本自动合并为自然段；中文智能排版去除字间多余空格
 - **二维码**：框选区域没有文字时自动兜底解码二维码
 - **智能排版**：按行还原排版，多栏文本不乱序
@@ -128,7 +128,7 @@
 
 ### 方式一：7z 绿色包（推荐）
 
-到 [Releases](https://github.com/q037180/SnapOCR/releases) 下载 `SnapOCR-v1.0.0-win64.7z`，解压得到 `SnapOCR/` 文件夹，进入后双击 `SnapOCR.exe` 即用。无需安装、不写注册表、删除文件夹即卸载，模型已内置，完全离线。
+到 [Releases](https://github.com/q037180/SnapOCR/releases) 下载 `SnapOCR-v1.0.0-win64.7z`，解压得到 `SnapOCR/` 文件夹，进入后双击 `SnapOCR.exe` 即用。无需安装、不写注册表、删除文件夹即卸载，内置简体中文模型，默认识别全程离线。切换繁中 / 英 / 日 / 韩时首次会联网下载对应识别模型（缓存到 `%APPDATA%\SnapOCR\models\`，之后离线可用）。
 
 绿色包是 **onedir 结构**（主程序 + 依赖目录），**启动明显更快**：单文件 exe 每次运行都要把 160 MB 自解压到临时目录，绿色包解压一次之后就不再做这一步。用同页的 `.sha256` 文件可校验完整性：
 
@@ -138,7 +138,7 @@ Get-FileHash .\SnapOCR-v1.0.0-win64.7z -Algorithm SHA256
 
 ### 方式二：单文件 exe
 
-下载 `SnapOCR.exe`，双击即用——无需安装 Python，内置中文模型，完全离线。
+下载 `SnapOCR.exe`，双击即用——无需安装 Python，内置简体中文模型，默认识别完全离线；切换其他语言首次需联网下载对应模型。
 
 > **关于 SmartScreen 提示**：本程序暂未做代码签名，首次运行时 Windows 可能弹出「Windows 已保护你的电脑」（绿色包同样如此）。这是未签名开源程序的正常提示，点「更多信息」→「仍要运行」即可。建议先核对 Release 页的 SHA-256 校验值再运行。如果介意，请从源码自行构建。
 
@@ -149,8 +149,9 @@ pip install -r requirements.txt
 python entry.py
 ```
 
-- 环境要求：Python 3.9+；Windows 10/11 完整支持，Linux / macOS 部分功能可用
-- 首次运行无需联网下载模型，开箱即用
+- 环境要求：Python 3.10+（已在 3.12 验证）；Windows 10/11 完整支持，Linux / macOS 部分功能可用
+- 默认简体中文模型开箱即用、无需联网；**切换到繁中 / 英 / 日 / 韩时首次会联网下载对应识别模型**，下载后缓存在 `%APPDATA%\SnapOCR\models\`，之后离线可用
+- 也可以双击根目录的 `启动.bat`，它会自动检查并安装缺失依赖后启动
 - 想自己打包单文件版：`pyinstaller SnapOCR.spec --noconfirm`
 - 想自己打包绿色版：`pyinstaller SnapOCR-portable.spec --noconfirm --workpath build/portable --distpath dist`，再运行 `python tools/make_portable_7z.py`
 
@@ -215,7 +216,7 @@ SnapOCR/
 
 已完成：
 
-- [x] 多语言识别（5 种模型内置）
+- [x] 多语言识别（内置简体中文模型，其余 4 种语言首次切换时按需下载）
 - [x] 图像增强 / 段落合并 / 水印过滤
 - [x] 表格识别导出 Excel
 - [x] PDF 整档识别（进度可取消）
@@ -234,7 +235,7 @@ SnapOCR/
 
 ## 隐私
 
-OCR 识别不联网、不上传，全部在本机完成。仅当使用翻译功能时，文本会发送到必应翻译 / MyMemory 公共接口。
+OCR 识别在本机完成，不上传任何截图或识别文本。有两类情况会联网：① 首次切换到繁中 / 英 / 日 / 韩时，从模型源下载对应识别模型到本地（只下载、不上传任何数据）；② 使用截屏翻译时，识别出的文本会发送到必应翻译 / MyMemory 公共接口，可在设置里关闭。除此之外不联网。
 
 ## License
 
@@ -259,7 +260,7 @@ Built-in OCR (Windows Snipping Tool, PowerToys Text Extractor, macOS Live Text) 
 ### At a glance
 
 - Hotkeys: `Ctrl+Alt+Q` capture · `Ctrl+Alt+T` translate · `Ctrl+Alt+L` long shot (all rebindable)
-- 5 bundled language models: Simplified Chinese, Traditional Chinese, English, Japanese, Korean
+- Bundled Simplified Chinese model works fully offline; Traditional Chinese / English / Japanese / Korean models are downloaded once on first switch, then cached locally
 - Dark-capture inversion, CLAHE enhancement, small-region upscaling, paragraph merging, CJK spacing cleanup, watermark keyword filtering
 - QR code fallback when a selected region contains no text
 - Batch queue (folder drag-in, dedupe, up to 500 images), whole-PDF OCR with cancellable progress
@@ -275,7 +276,7 @@ Built-in OCR (Windows Snipping Tool, PowerToys Text Extractor, macOS Live Text) 
 
 1. Go to [Releases](https://github.com/q037180/SnapOCR/releases).
 2. Download `SnapOCR-v1.0.0-win64.7z` (**recommended**) and unzip anywhere; or download the single-file `SnapOCR.exe`.
-3. Open the unzipped `SnapOCR/` folder and run `SnapOCR.exe`. No Python, no installer, no admin rights, no model downloads. To uninstall, delete the folder.
+3. Open the unzipped `SnapOCR/` folder and run `SnapOCR.exe`. No Python, no installer, no admin rights, and no model download for the default Simplified Chinese model. Switching to another language downloads that recognition model once (into `%APPDATA%\SnapOCR\models\`). To uninstall, delete the folder.
 
 The 7z build uses a normal **onedir** layout (main exe + dependency folder). Unlike the single-file exe, which self-extracts 160 MB into a temp directory on every launch, it starts directly after one unzip.
 
@@ -298,7 +299,7 @@ python tests/platform_check.py
 pyinstaller SnapOCR.spec --noconfirm
 ```
 
-Requires Python 3.9+. Models are bundled, so no network access is needed at first run.
+Requires Python 3.10+ (verified on 3.12). The default Simplified Chinese model is bundled, so no network access is needed at first run. Switching to another language downloads that recognition model once; subsequent runs are offline.
 
 ### Platform support
 
@@ -315,13 +316,14 @@ Missing hotkeys or long-shot support never crashes the app — the GUI buttons a
 
 ### Privacy
 
-OCR is entirely local: no upload, no telemetry, no account. **The only exception is screen translation**, which sends the recognized text to Bing Translator / MyMemory public endpoints. Translators can be disabled in settings.
+OCR runs locally: no screenshot or recognized text is uploaded, no telemetry, no account. Two things do use the network: **a one-time recognition-model download** when you first switch to Traditional Chinese / English / Japanese / Korean (download only, nothing uploaded), and **screen translation**, which sends the recognized text to Bing Translator / MyMemory public endpoints and can be disabled in settings.
 
 ### Known limitations
 
 - Fixed page headers may repeat in stitched long shots; animated/video areas can misalign.
 - A 160 MB single-file exe unpacks on every launch — the onedir 7z build starts directly and is the recommended download.
 - No automatic updater yet; check Releases for new versions.
+- Only the Simplified Chinese recognition model is bundled; the other four languages need a one-time download on first use.
 - Multi-monitor handling and formula recognition are on the roadmap.
 
 ### Contributing & feedback

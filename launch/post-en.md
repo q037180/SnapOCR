@@ -17,7 +17,7 @@ Show HN: SnapOCR – offline screenshot OCR that pre-processes dark UI captures
 ```
 I built a small Windows OCR tool because two things kept annoying me.
 
-Most screenshot OCR (including the built-in Windows Snipping Tool text actions and PowerToys Text Extractor) works fine on white pages, but dark IDE / dark-mode captures often lose entire lines: detection models are mostly trained on dark text on light backgrounds. SnapOCR measures mean gray level, inverts the capture when it is below 100, applies CLAHE on the LAB L channel when contrast is low (std < 45), and upscales small crops 2-3x -- all before handing the image to RapidOCR / PP-OCRv6. Five language models are bundled and recognition is fully offline.
+Most screenshot OCR (including the built-in Windows Snipping Tool text actions and PowerToys Text Extractor) works fine on white pages, but dark IDE / dark-mode captures often lose entire lines: detection models are mostly trained on dark text on light backgrounds. SnapOCR measures mean gray level, inverts the capture when it is below 100, applies CLAHE on the LAB L channel when contrast is low (std < 45), and upscales small crops 2-3x -- all before handing the image to RapidOCR / PP-OCRv6. The default Simplified Chinese model is bundled and works fully offline; the other four languages download their recognition model once on first use.
 
 The second thing: the clipboard remembers one item. Every recognition in SnapOCR goes into a searchable history with hover preview, one-click re-copy, and export to txt / docx / pdf / md / xlsx.
 
@@ -27,7 +27,7 @@ Honest limitations, since they matter here:
 - Windows 10/11 x64 is the only platform with a binary. Linux/macOS run from source; global hotkeys need sudo or Accessibility permission, and scrolling long-shot is Win32-only.
 - The exe is not code-signed, so SmartScreen will complain on first run. SHA-256 checksums are on the release page.
 - The single-file build is 160 MB and unpacks on every launch; the 7z portable build uses a normal onedir layout (exe + dependency folder), so it starts faster and never self-extracts.
-- OCR never touches the network. Only the optional translation feature sends recognized text to Bing Translator / MyMemory. No auto-updater yet.
+- OCR never uploads anything. Two network cases remain: a one-time recognition-model download when you first switch away from Simplified Chinese, and the optional translation feature (sends recognized text to Bing Translator / MyMemory). No auto-updater yet.
 
 Stack: Python 3.12, PySide6, RapidOCR + onnxruntime, OpenCV. MIT licensed. ~7 s for a full 1080p screen on CPU, near-instant for small regions.
 
@@ -60,11 +60,11 @@ PySide6 + RapidOCR: a local screenshot OCR tool with automatic dark-capture prep
 **Body**
 
 ```
-Most of my screens are dark — editor, terminal, docs — and built-in OCR tools tend to miss lines on dark backgrounds. So I added a preprocessing step before recognition: invert when mean gray < 100, CLAHE on the LAB L channel when contrast is low, upscale small crops. Then RapidOCR / PP-OCRv6 runs locally with bundled models; nothing is uploaded.
+Most of my screens are dark — editor, terminal, docs — and built-in OCR tools tend to miss lines on dark backgrounds. So I added a preprocessing step before recognition: invert when mean gray < 100, CLAHE on the LAB L channel when contrast is low, upscale small crops. Then RapidOCR / PP-OCRv6 runs locally with the bundled Simplified Chinese model; nothing is uploaded. Other languages download their recognition model once on first use.
 
 The other half is a searchable history for every recognition, because the clipboard only keeps the last one. Also has folder batch OCR, PDF page-by-page OCR, table -> xlsx, long-shot stitching, pinned captures and screen translation.
 
-Caveats up front: Windows-only binary (Linux/macOS from source with hotkey limitations), unsigned exe (SmartScreen on first run, SHA-256 provided), 160 MB single-file build unpacks on each launch so there's an onedir 7z portable build too, translation is the only networked feature, no auto-updater.
+Caveats up front: Windows-only binary (Linux/macOS from source with hotkey limitations), unsigned exe (SmartScreen on first run, SHA-256 provided), 160 MB single-file build unpacks on each launch so there's an onedir 7z portable build too, translation and the one-time model download for non-Chinese languages are the only networked features, no auto-updater.
 
 Repo: https://github.com/q037180/SnapOCR
 Releases: https://github.com/q037180/SnapOCR/releases

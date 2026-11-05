@@ -1,6 +1,12 @@
-PySide6>=6.6
-rapidocr>=2.0
+# Runtime deps for source installs.
+# rapidocr 3.x is required: engine.py uses its flat config keys
+# (Global.model_root_dir / Det.limit_type / Rec.lang_type) and RapidOCROutput.
+# rapidocr 2.x has a different API and fails at engine init.
+PySide6>=6.6,<7
+rapidocr>=3.10,<4
 onnxruntime>=1.17
+opencv-python-headless>=4.8
+numpy>=1.24,<3
 mss>=9.0
 keyboard>=0.13.5
 python-docx>=1.1

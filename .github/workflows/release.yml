@@ -22,17 +22,25 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt pyinstaller
 
-      - name: Build exe
-        run: pyinstaller --noconfirm --windowed --name SnapOCR --collect-all rapidocr entry.py
+      # Use the repo spec instead of a bare pyinstaller call. The spec bundles
+      # app/assets and RapidOCR data files, and filters stale top-level VC/ICU
+      # DLLs that otherwise break Qt6Core on some hosts. It also emits the
+      # single-file dist/SnapOCR.exe expected by the steps below.
+      - name: Build single-file exe
+        run: pyinstaller SnapOCR.spec --noconfirm
+
+      - name: Verify artifact exists
+        run: python -c "import os,sys; p='dist/SnapOCR.exe'; print(p, os.path.getsize(p) if os.path.isfile(p) else 'MISSING'); sys.exit(0 if os.path.isfile(p) else 1)"
 
       - uses: actions/upload-artifact@v4
         with:
           name: SnapOCR-windows-x64
           path: dist/SnapOCR.exe
 
+      # Release notes are maintained by hand; auto-generation would overwrite them.
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: dist/SnapOCR.exe
-          generate_release_notes: true
+          generate_release_notes: false
