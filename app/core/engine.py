@@ -473,6 +473,10 @@ def _grid_from_words(words) -> list[list[str]]:
             cells.setdefault(col_index((w[0] + w[1]) / 2.0), []).append(w)
         row = [" ".join(w[4] for w in sorted(ws, key=lambda w: w[0]))
                for _, ws in sorted(cells.items())]
+        if config.CJK_COMPACT:
+            # 字级 word_box 会把「姓名」切成「姓」「名」，直接空格拼接会导出成
+            # 「姓 名」。这里复用智能排版去掉汉字之间的空格（英文词间空格保留）。
+            row = [compact_cjk(c) for c in row]
         if n_cols > 1:
             row += [""] * (n_cols - len(row))  # 右侧空单元格补齐
         grid.append(row)

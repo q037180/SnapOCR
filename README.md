@@ -155,7 +155,7 @@ python entry.py
 - 想自己打包单文件版：`pyinstaller SnapOCR.spec --noconfirm`
 - 想自己打包绿色版：`pyinstaller SnapOCR-portable.spec --noconfirm --workpath build/portable --distpath dist`，再运行 `python tools/make_portable_7z.py`
 
-性能参考：基于 RapidOCR（PP-OCRv6 模型），1080p 全屏识别约 7 秒，框选小区域秒出。
+性能参考：基于 RapidOCR（PP-OCRv6 模型），1080p 全屏识别约 7–10 秒（视 CPU 与文字密度），框选小区域秒出。
 
 ## 跨平台兼容性
 
@@ -266,7 +266,7 @@ Built-in OCR (Windows Snipping Tool, PowerToys Text Extractor, macOS Live Text) 
 - Batch queue (folder drag-in, dedupe, up to 500 images), whole-PDF OCR with cancellable progress
 - Table → editable grid → `.xlsx`; pinned always-on-top captures; 11-language screen translation
 - Export: `.txt` / `.docx` / `.pdf` / `.md` / `.xlsx`
-- Performance reference: ~7 s for a full 1080p screen on CPU; small regions are near-instant
+- Performance reference: ~7–10 s for a full 1080p screen on CPU (depends on CPU and text density); small regions are near-instant
 
 ![Capture demo](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo.gif)
 
