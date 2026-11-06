@@ -18,9 +18,13 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      # action 版本：全部用 Node 24 运行时的 major，避免 GitHub 的
+      # "Node.js 20 is deprecated ... forced to run on Node.js 24" 警告。
+      # checkout v5+ / setup-python v6+ / upload-artifact v5+ / gh-release v3+
+      # 都是 node24；这里取各自当前最新 major，用法未变。
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -78,7 +82,7 @@ jobs:
             "{0}  {1}" -f $p, $line
           }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: SnapOCR-windows-x64
           path: |
@@ -89,7 +93,7 @@ jobs:
       # Release notes are maintained by hand; auto-generation would overwrite them.
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/SnapOCR.exe
