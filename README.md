@@ -33,6 +33,8 @@
 ![历史搜索演示：识别结果随时搜回来](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/preview-hover.gif)
 
 > 想一次看完 15 秒串联演示（截图识别 → 历史搜索 → 导出）：[hero-15s.gif](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/hero-15s.gif)
+>
+> <sub>演示图合计约 3 MB。若长时间空白不显示，是当前网络访问 GitHub 资源受限（不是图挂了），可直接在仓库 `assets/` 目录里查看同名文件。</sub>
 
 ---
 
@@ -141,6 +143,15 @@ Get-FileHash .\SnapOCR-v1.0.1-win64.7z -Algorithm SHA256
 下载 `SnapOCR.exe`，双击即用——无需安装 Python，内置简体中文模型，默认识别完全离线；切换其他语言首次需联网下载对应模型。
 
 > **关于 SmartScreen 提示**：本程序暂未做代码签名，首次运行时 Windows 可能弹出「Windows 已保护你的电脑」（绿色包同样如此）。这是未签名开源程序的正常提示，点「更多信息」→「仍要运行」即可。建议先核对 Release 页的 SHA-256 校验值再运行。如果介意，请从源码自行构建。
+
+> **下载很慢 / 报网络错误？** 这不是文件损坏，是 GitHub 的下载域名（`release-assets.githubusercontent.com`）在部分网络下会被限速或断流，表现为下到一半停住、提示网络错误、或代理软件报超时。两种办法：
+> 1. 用支持断点续传的下载器（IDM、迅雷、`curl -C -`），断了重连续传，不必从头开始；
+> 2. 走镜像前缀（第三方转发，不修改文件内容；下载后仍请核对上面的 SHA-256）：
+>
+> ```
+> https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.1/SnapOCR-v1.0.1-win64.7z
+> ```
+
 
 ### 方式三：从源码运行
 
@@ -287,6 +298,12 @@ Get-FileHash .\SnapOCR-v1.0.1-win64.7z -Algorithm SHA256
 ```
 
 > **SmartScreen notice:** the binary is not code-signed yet. Windows may show "Windows protected your PC" on first run. Choose **More info → Run anyway**, ideally after checking the SHA-256. This is expected for an unsigned independent open-source build; building from source is always an option.
+
+> **Slow download / network errors?** That is not a corrupted file. GitHub serves release downloads from `release-assets.githubusercontent.com`, which is throttled or dropped on some networks (downloads stall halfway, or the proxy times out). Resume-capable downloaders (`curl -C -`, IDM) work; alternatively use a mirror prefix (third-party pass-through, file contents unchanged — still verify the SHA-256 above):
+>
+> ```
+> https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.1/SnapOCR-v1.0.1-win64.7z
+> ```
 
 ### From source
 
