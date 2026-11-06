@@ -136,12 +136,12 @@
 
 ### 方式一：7z 绿色包（推荐）
 
-到 [Releases](https://github.com/q037180/SnapOCR/releases) 下载 `SnapOCR-v1.0.1-win64.7z`，解压得到 `SnapOCR/` 文件夹，进入后双击 `SnapOCR.exe` 即用。无需安装、不写注册表、删除文件夹即卸载，内置简体中文模型，默认识别全程离线。切换繁中 / 英 / 日 / 韩时首次会联网下载对应识别模型（缓存到 `%APPDATA%\SnapOCR\models\`，之后离线可用）。
+到 [Releases](https://github.com/q037180/SnapOCR/releases) 下载 `SnapOCR-v1.0.2-win64.7z`，解压得到 `SnapOCR/` 文件夹，进入后双击 `SnapOCR.exe` 即用。无需安装、不写注册表、删除文件夹即卸载，内置简体中文模型，默认识别全程离线。切换繁中 / 英 / 日 / 韩时首次会联网下载对应识别模型（缓存到 `%APPDATA%\SnapOCR\models\`，之后离线可用）。
 
 绿色包是 **onedir 结构**（主程序 + 依赖目录），**启动明显更快**：单文件 exe 每次运行都要把 160 MB 自解压到临时目录，绿色包解压一次之后就不再做这一步。实测同一台机器：绿色包启动约 **2.5 秒**，单文件 exe **11–16 秒**。用同页的 `.sha256` 文件可校验完整性：
 
 ```powershell
-Get-FileHash .\SnapOCR-v1.0.1-win64.7z -Algorithm SHA256
+Get-FileHash .\SnapOCR-v1.0.2-win64.7z -Algorithm SHA256
 ```
 
 ### 方式二：单文件 exe
@@ -155,7 +155,7 @@ Get-FileHash .\SnapOCR-v1.0.1-win64.7z -Algorithm SHA256
 > 2. 走镜像前缀（第三方转发，不修改文件内容；下载后仍请核对上面的 SHA-256）：
 >
 > ```
-> https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.1/SnapOCR-v1.0.1-win64.7z
+> https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.2/SnapOCR-v1.0.2-win64.7z
 > ```
 
 
@@ -292,7 +292,7 @@ Built-in OCR (Windows Snipping Tool, PowerToys Text Extractor, macOS Live Text) 
 ### Install (Windows 10/11 x64)
 
 1. Go to [Releases](https://github.com/q037180/SnapOCR/releases).
-2. Download `SnapOCR-v1.0.1-win64.7z` (**recommended**) and unzip anywhere; or download the single-file `SnapOCR.exe`.
+2. Download `SnapOCR-v1.0.2-win64.7z` (**recommended**) and unzip anywhere; or download the single-file `SnapOCR.exe`.
 3. Open the unzipped `SnapOCR/` folder and run `SnapOCR.exe`. No Python, no installer, no admin rights, and no model download for the default Simplified Chinese model. Switching to another language downloads that recognition model once (into `%APPDATA%\SnapOCR\models\`). To uninstall, delete the folder.
 
 The 7z build uses a normal **onedir** layout (main exe + dependency folder). Unlike the single-file exe, which self-extracts 160 MB into a temp directory on every launch, it starts directly after one unzip. Measured on the same machine: about **2.5 s** for the portable build versus **11–16 s** for the single-file exe.
@@ -300,7 +300,7 @@ The 7z build uses a normal **onedir** layout (main exe + dependency folder). Unl
 Verify the archive with the `.sha256` file on the release page:
 
 ```powershell
-Get-FileHash .\SnapOCR-v1.0.1-win64.7z -Algorithm SHA256
+Get-FileHash .\SnapOCR-v1.0.2-win64.7z -Algorithm SHA256
 ```
 
 > **SmartScreen notice:** the binary is not code-signed yet. Windows may show "Windows protected your PC" on first run. Choose **More info → Run anyway**, ideally after checking the SHA-256. This is expected for an unsigned independent open-source build; building from source is always an option.
@@ -308,7 +308,7 @@ Get-FileHash .\SnapOCR-v1.0.1-win64.7z -Algorithm SHA256
 > **Slow download / network errors?** That is not a corrupted file. GitHub serves release downloads from `release-assets.githubusercontent.com`, which is throttled or dropped on some networks (downloads stall halfway, or the proxy times out). Resume-capable downloaders (`curl -C -`, IDM) work; alternatively use a mirror prefix (third-party pass-through, file contents unchanged — still verify the SHA-256 above):
 >
 > ```
-> https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.1/SnapOCR-v1.0.1-win64.7z
+> https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.2/SnapOCR-v1.0.2-win64.7z
 > ```
 
 ### From source

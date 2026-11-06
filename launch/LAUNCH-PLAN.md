@@ -35,11 +35,11 @@ Offline screenshot OCR for dark IDEs and dark-mode pages — auto-inverts dark c
 
 ## 1. Release 资产（已完成，留作核对）
 
-`v1.0.1`（2026-11-06）已由 CI 自动产出并挂到 Release：`SnapOCR.exe`（155 MB）、`SnapOCR-v1.0.1-win64.7z`（115 MB）、两个 `.sha256`，校验值与 GitHub 记录的资产 digest 一致。`v1.0.0` 的 Release 保留原样，图片素材仍从它直链引用：
+`v1.0.2`（2026-11-06）已由 CI 自动产出并挂到 Release：`SnapOCR.exe`、`SnapOCR-v1.0.2-win64.7z`、两个 `.sha256`，校验值与 GitHub 记录的资产 digest 一致。`v1.0.1` 保留为上一个补丁版。`v1.0.0` 的 Release 保留原样，图片素材仍从它直链引用：
 
 | 文件 | 用途 |
 | --- | --- |
-| `SnapOCR-v1.0.1-win64.7z` | onedir 绿色包，解压一次、启动免自解压（**对外主推**） |
+| `SnapOCR-v1.0.2-win64.7z` | onedir 绿色包，解压一次、启动免自解压（**对外主推**） |
 | `SnapOCR.exe` | 单文件版 |
 | `*.sha256` | 对应校验值 |
 | `assets/compare-dark-ui.png` | 投稿首图（深色截图真实前后对比，v1.0.0 Release 直链） |
