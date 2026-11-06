@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -40,7 +41,12 @@ from PySide6.QtWidgets import (
 
 from app import config
 from app.core.engine import compact_cjk, get_engine
-from app.core.exporter import export_text, export_xlsx
+from app.core.exporter import (
+    ensure_text_suffix,
+    ensure_xlsx_suffix,
+    export_text,
+    export_xlsx,
+)
 from app.core.pdf_ocr import PdfWorker
 from app.ui.capture_overlay import CaptureOverlay
 from app.ui.longshot import LongShotBar, LongShotDialog
@@ -78,6 +84,32 @@ def _load_bg() -> QPixmap:
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "bg.png"
     )
     return QPixmap(path)
+
+
+def _running(worker) -> bool:
+    """线程是否还在跑；C++ 对象已被销毁时不能调用 isRunning()（会抛 RuntimeError）。"""
+    try:
+        return worker is not None and worker.isRunning()
+    except RuntimeError:
+        return False
+
+
+def _retire(worker) -> None:
+    """线程结束后释放 C++ 对象。
+
+    不能在 done 槽里直接丢引用：run() 里 emit 之后才 return，这一刻线程可能
+    仍处于 running 状态，析构会触发 "QThread: Destroyed while thread is still
+    running" 直接 abort。统一等 finished 再 deleteLater。
+    """
+    if worker is None:
+        return
+    try:
+        if worker.isFinished():
+            worker.deleteLater()
+        else:
+            worker.finished.connect(worker.deleteLater)
+    except RuntimeError:
+        pass
 
 
 class BgCentral(QWidget):
@@ -137,6 +169,11 @@ class OcrWorker(QThread):
         self._image = image
         self._files = files or []  # 拖拽的图片文件 [(文件名, 字节)]
         self._paths = paths or []  # 批量识别：只传路径，由线程逐张读取
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        """请求停止（退出程序时用）：逐张处理，下一次循环检查即返回。"""
+        self._cancelled = True
 
     def run(self) -> None:
         try:
@@ -146,6 +183,8 @@ class OcrWorker(QThread):
                 total = len(self._paths)
                 multi = total > 1
                 for i, path in enumerate(self._paths):
+                    if self._cancelled:
+                        return
                     name = os.path.basename(path)
                     self.progress.emit(i + 1, total, name)
                     try:
@@ -164,6 +203,8 @@ class OcrWorker(QThread):
                 parts = []
                 multi = len(self._files) > 1
                 for name, data in self._files:
+                    if self._cancelled:
+                        return
                     text = get_engine().recognize_bytes(data)
                     parts.append(f"== {name} ==\n{text}" if multi else text)
                 self.done.emit("\n\n".join(parts))
@@ -261,6 +302,7 @@ class MainWindow(QMainWindow):
         self._export_worker: ExportWorker | None = None
         self._export_dlg: QProgressDialog | None = None
         self._export_cancelled = False
+        self._quit_waiting: list = []  # 退出时还在跑的线程，全部结束后才真正 quit
 
         self._build_ui()
         self._build_tray()
@@ -565,20 +607,59 @@ class MainWindow(QMainWindow):
         return "全局热键注册失败：Linux 需要 root 权限，或该组合已被其他程序占用"
 
     # ---- 截图流程 ----
+    def _overlay_alive(self) -> bool:
+        """遮罩是否还在（被 Alt+F4 关掉后 Python 包装对象已失效，必须清掉引用）。"""
+        if self._overlay is None:
+            return False
+        try:
+            return self._overlay.isVisible()
+        except RuntimeError:
+            self._overlay = None
+            self._capture_translate = False
+            self._capture_long = False
+            self._capture_table = False
+            self._capture_pin = False
+            return False
+
+    def _longshot_alive(self) -> bool:
+        """长截图控制条是否还在（同上，避免异常关闭后永久卡住截图功能）。"""
+        if self._longshot_bar is None:
+            return False
+        try:
+            return self._longshot_bar.isVisible()
+        except RuntimeError:
+            self._longshot_bar = None
+            return False
+
+    def _new_overlay(self):
+        """创建截图遮罩；抓屏失败（远程桌面断开、显示驱动异常）时给提示而不是崩在槽里。"""
+        try:
+            return CaptureOverlay()
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, config.APP_NAME, f"截屏失败：{exc}")
+            return None
+
     def start_capture(self, translate: bool = False, long: bool = False,
                       pin: bool = False) -> None:
-        if self._overlay is not None:
+        if pin and not config.OCR_PIN:
+            QMessageBox.information(
+                self, config.APP_NAME, "截图贴图未开启，请在「设置 → 功能」中勾选。"
+            )
+            return
+        if self._overlay_alive():
             return
         if not self._check_ocr_busy():
             return
-        if self._longshot_bar is not None:
+        if self._longshot_alive():
             self.statusBar().showMessage("长截图会话进行中，请先完成或取消", 3000)
             return
         self._capture_translate = translate
         self._capture_long = long
         self._capture_pin = pin
         self._capture_table = False
-        self._overlay = CaptureOverlay()
+        self._overlay = self._new_overlay()
+        if self._overlay is None:
+            return
         if long:
             self._overlay.regionSelected.connect(self._on_region_selected)
         else:
@@ -593,8 +674,9 @@ class MainWindow(QMainWindow):
             ("表格识别", self._table_worker),
             ("PDF 识别", self._pdf_worker),
             ("批量识别", self._batch_worker),
+            ("长截图", self._longshot_worker),
         ):
-            if w is not None and w.isRunning():
+            if _running(w):
                 self.statusBar().showMessage(f"{name}进行中，请稍候", 3000)
                 return False
         return True
@@ -606,18 +688,21 @@ class MainWindow(QMainWindow):
                 self, config.APP_NAME, "表格识别未开启，请在「设置 → 功能」中勾选。"
             )
             return
-        if self._overlay is not None:
+        if self._overlay_alive():
             return
         if not self._check_ocr_busy():
             return
-        if self._longshot_bar is not None:
+        if self._longshot_alive():
             self.statusBar().showMessage("长截图会话进行中，请先完成或取消", 3000)
             return
         self._capture_translate = False
         self._capture_long = False
         self._capture_pin = False
         self._capture_table = True
-        self._overlay = CaptureOverlay()
+        self._overlay = self._new_overlay()
+        if self._overlay is None:
+            self._capture_table = False
+            return
         self._overlay.captured.connect(self._on_captured)
         self._overlay.cancelled.connect(self._on_capture_cancelled)
         self._overlay.start()
@@ -681,7 +766,7 @@ class MainWindow(QMainWindow):
                 self, config.APP_NAME, "PDF 识别未开启，请在「设置 → 功能」中勾选。"
             )
             return
-        if self._overlay is not None or not self._check_ocr_busy():
+        if self._overlay_alive() or not self._check_ocr_busy():
             return
         path, _ = QFileDialog.getOpenFileName(
             self, "选择要识别的 PDF", "", "PDF 文档 (*.pdf)"
@@ -716,9 +801,16 @@ class MainWindow(QMainWindow):
 
     def _close_pdf_dlg(self) -> None:
         if self._pdf_dlg is not None:
-            self._pdf_dlg.reset()
-            self._pdf_dlg.close()
+            dlg = self._pdf_dlg
             self._pdf_dlg = None
+            # 先断开 canceled：reset() 在某些平台会触发 canceled，
+            # 那会在识别成功时误调 worker.cancel() 并覆盖状态栏文字
+            try:
+                dlg.canceled.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+            dlg.reset()
+            dlg.close()
         self.statusBar().clearMessage()
 
     def _on_ocr_done(self, text: str, translate: bool = False) -> None:
@@ -772,6 +864,7 @@ class MainWindow(QMainWindow):
             self, "保存表格为 Excel", default, "Excel 工作簿 (*.xlsx)"
         )
         if path:
+            path = ensure_xlsx_suffix(path)
             try:
                 export_xlsx(path, rows)
                 self.tray.showMessage(
@@ -787,7 +880,8 @@ class MainWindow(QMainWindow):
             )
 
     # ---- 长截图 ----
-    def _on_region_selected(self, x: int, y: int, w: int, h: int) -> None:
+    def _on_region_selected(self, x: int, y: int, w: int, h: int,
+                            logical=None) -> None:
         self._overlay = None
         self._capture_translate = False
         self._capture_long = False
@@ -797,7 +891,8 @@ class MainWindow(QMainWindow):
         self._longshot_worker.progress.connect(self._on_longshot_progress)
         self._longshot_worker.done.connect(self._on_longshot_done)
         self._longshot_worker.fail.connect(self._on_longshot_fail)
-        bar = LongShotBar((x, y, w, h))
+        # 控制条按逻辑坐标摆位：物理坐标在 125%/150% 缩放下会偏到别处
+        bar = LongShotBar((x, y, w, h), logical)
         bar.startClicked.connect(self._on_longshot_start)
         bar.stopClicked.connect(self._on_longshot_stop)
         bar.cancelClicked.connect(self._on_longshot_cancel)
@@ -809,28 +904,38 @@ class MainWindow(QMainWindow):
 
     def _on_longshot_start(self) -> None:
         w = self._longshot_worker
-        if w is None or w.isRunning():
+        if w is None or _running(w):
             return
         w.start()
-        if self._longshot_bar is not None:
-            self._longshot_bar.set_running(True)
+        try:
+            if self._longshot_bar is not None:
+                self._longshot_bar.set_running(True)
+        except RuntimeError:  # 控制条刚被关掉
+            self._longshot_bar = None
 
     def _on_longshot_stop(self) -> None:
         if self._longshot_worker is not None:
             self._longshot_worker.stop()
 
     def _on_longshot_progress(self, text: str) -> None:
-        if self._longshot_bar is not None:
-            self._longshot_bar.set_status(text)
+        try:
+            if self._longshot_bar is not None:
+                self._longshot_bar.set_status(text)
+        except RuntimeError:  # 控制条刚被关掉
+            self._longshot_bar = None
 
     def _on_longshot_done(self, image: QImage) -> None:
-        self._close_longshot_bar()
+        w = self._longshot_worker
         self._longshot_worker = None
+        self._close_longshot_bar()
+        _retire(w)
         self._open_longshot_dialog(image)
 
     def _on_longshot_fail(self, msg: str) -> None:
-        self._close_longshot_bar()
+        w = self._longshot_worker
         self._longshot_worker = None
+        self._close_longshot_bar()
+        _retire(w)
         self.tray.showMessage(
             config.APP_NAME, f"长截图失败：{msg}", QSystemTrayIcon.Warning, 3000
         )
@@ -847,14 +952,14 @@ class MainWindow(QMainWindow):
             w.fail.disconnect()
         except (RuntimeError, TypeError):
             pass
-        if w.isRunning():
+        if _running(w):
             w.stop()
             if not w.wait(5000):
                 # 还卡在 mss 抓屏里：不能丢引用，否则 QThread 运行中被销毁会崩进程。
                 # 保留引用，等它自己结束后再回收。
                 self._longshot_worker = w
                 w.finished.connect(lambda: self._on_longshot_worker_finished(w))
-                w.finished.connect(w.deleteLater)
+                _retire(w)
                 self.statusBar().showMessage("长截图正在退出采集，请稍候", 5000)
                 return
         self._longshot_worker = None
@@ -864,9 +969,15 @@ class MainWindow(QMainWindow):
             self._longshot_worker = None
 
     def _close_longshot_bar(self) -> None:
-        if self._longshot_bar is not None:
-            self._longshot_bar.close()
-            self._longshot_bar = None
+        """关闭控制条；已经销毁（被 Alt+F4）时安静跳过，不能让槽抛异常。"""
+        bar = self._longshot_bar
+        self._longshot_bar = None
+        if bar is None:
+            return
+        try:
+            bar.dismiss()
+        except RuntimeError:
+            pass
 
     def _open_longshot_dialog(self, image: QImage) -> None:
         if self._longshot_dlg is not None:
@@ -884,8 +995,7 @@ class MainWindow(QMainWindow):
         self._longshot_dlg = None
 
     def _on_longshot_ocr(self, image: QImage, translate: bool) -> None:
-        if self._worker is not None and self._worker.isRunning():
-            self.statusBar().showMessage("识别进行中，请稍候", 3000)
+        if not self._check_ocr_busy():
             return
         self.statusBar().showMessage("识别中...")
         self._worker = OcrWorker(image)
@@ -1210,7 +1320,7 @@ class MainWindow(QMainWindow):
 
     def _export_selected(self) -> None:
         """把选中的历史记录导出为 txt / docx / pdf / md（后台线程，界面不冻结）。"""
-        if self._export_worker is not None and self._export_worker.isRunning():
+        if _running(self._export_worker):
             self.statusBar().showMessage("导出进行中，请稍候", 3000)
             return
         rows = sorted({i.data(Qt.UserRole) for i in self.list.selectedIndexes()})
@@ -1220,13 +1330,14 @@ class MainWindow(QMainWindow):
         texts = [self._history[i]["text"] for i in rows if 0 <= i < len(self._history)]
         text = "\n".join(texts)
         default = os.path.join(os.path.expanduser("~"), "SnapOCR导出.txt")
-        path, _ = QFileDialog.getSaveFileName(
+        path, selected = QFileDialog.getSaveFileName(
             self, "导出所选记录", default,
             "文本文件 (*.txt);;Word 文档 (*.docx);;PDF 文档 (*.pdf);;"
             "Markdown (*.md)",
         )
         if not path:
             return
+        path = ensure_text_suffix(path, selected)
         if os.path.splitext(path)[1].lower() in (".pdf", ".docx") and len(text) > 200_000:
             # 渲染是 CPU 密集的：先打招呼，用户可以选择换 txt 或耐心等
             if QMessageBox.question(
@@ -1351,6 +1462,12 @@ class MainWindow(QMainWindow):
 
         # 拖入了 PDF：一次识别一个，优先处理 PDF
         if pdfs:
+            if not config.OCR_PDF:
+                QMessageBox.information(
+                    self, config.APP_NAME,
+                    "PDF 识别未开启，请在「设置 → 功能」中勾选。",
+                )
+                return
             if len(pdfs) > 1:
                 self.statusBar().showMessage("一次只能识别一个 PDF，已取第一个", 4000)
             if not self._check_ocr_busy():
@@ -1392,7 +1509,7 @@ class MainWindow(QMainWindow):
             self._queue_batch(paths)
 
     def _on_batch_clear(self) -> None:
-        if self._batch_worker is not None and self._batch_worker.isRunning():
+        if _running(self._batch_worker):
             return
         self._batch_files.clear()
         self._refresh_batch_list()
@@ -1432,7 +1549,7 @@ class MainWindow(QMainWindow):
 
     def _pdf_ocr_path(self, path: str) -> None:
         """对指定 PDF 启动识别（拖拽与文件对话框共用）。"""
-        if self._overlay is not None or not self._check_ocr_busy():
+        if self._overlay_alive() or not self._check_ocr_busy():
             return
         self.statusBar().showMessage(f"PDF 识别中：{os.path.basename(path)}")
         self._pdf_dlg = QProgressDialog("正在识别...", "取消", 0, 1, self)
@@ -1488,32 +1605,51 @@ class MainWindow(QMainWindow):
             keyboard.unhook_all()
         except Exception:  # noqa: BLE001
             pass
-        # 长截图线程可能正在注入滚轮：先请求停止并等待，避免退出后仍在动鼠标
-        if self._longshot_worker is not None and self._longshot_worker.isRunning():
+        # 先请求所有能取消的线程收手：长截图停止注入滚轮、
+        # PDF 逐页检查、批量识别逐张检查
+        if _running(self._longshot_worker):
             self._longshot_worker.stop()
-            if not self._longshot_worker.wait(30000):
-                self._longshot_worker.finished.connect(QApplication.quit)
-                return
-        # 等待后台线程结束，避免 ONNX 运行时在进程退出时崩溃
-        if self._pdf_worker is not None and self._pdf_worker.isRunning():
+        if _running(self._pdf_worker):
             self._pdf_worker.cancel()
-        for w in (self._pdf_worker, self._table_worker, self._batch_worker):
-            if w is not None and w.isRunning():
-                w.wait(10000)
-        if self._preload is not None and self._preload.isRunning():
-            self._preload.wait(10000)
-        if self._export_worker is not None and self._export_worker.isRunning():
-            # 导出线程里正在跑 Qt 打印：进程退出时销毁运行中的 QThread 会崩
-            self._export_worker.wait(5000)
-            if self._export_worker.isRunning():
-                self._export_worker.finished.connect(QApplication.quit)
-                self.statusBar().showMessage("导出尚未完成，结束后自动退出", 5000)
-                return
-        if self._worker is not None and self._worker.isRunning():
-            self._worker.wait(10000)
-            if self._worker.isRunning():
-                # 超大截图识别可能超过 10 秒：先等线程真正结束再退出，
-                # 避免线程运行中销毁导致崩溃
-                self._worker.finished.connect(QApplication.quit)
-                return
+        if _running(self._batch_worker):
+            self._batch_worker.cancel()
+
+        pending = [
+            w for w in (
+                self._longshot_worker, self._pdf_worker, self._table_worker,
+                self._batch_worker, self._preload, self._export_worker,
+                self._worker, self._translate_worker(),
+            ) if _running(w)
+        ]
+        # 正常收尾给 3 秒（所有线程共享这个预算，避免挨个 wait 叠加成十几秒）；
+        # 还没结束就登记下来，等它们全部结束后再退出。绝不能直接 quit：
+        # 销毁运行中的 QThread 会让进程 abort（实测退出码 127），
+        # 而批量 500 张 / 首次下载模型都远超这个时间。
+        deadline = time.monotonic() + 3.0
+        still = []
+        for w in pending:
+            left = max(0, int((deadline - time.monotonic()) * 1000))
+            if not w.wait(left):
+                still.append(w)
+        if still:
+            self._quit_waiting = list(still)
+            for w in still:
+                w.finished.connect(lambda w=w: self._on_quit_finished(w))
+            self.statusBar().showMessage("后台任务正在结束，完成后自动退出", 8000)
+            return
         QApplication.quit()
+
+    def _on_quit_finished(self, w) -> None:
+        """等所有未结束的线程都结束，再真正退出。"""
+        self._quit_waiting = [x for x in self._quit_waiting if x is not w]
+        if not self._quit_waiting:
+            QApplication.quit()
+
+    def _translate_worker(self):
+        dlg = self._translate_dlg
+        if dlg is None:
+            return None
+        try:
+            return dlg.active_worker()
+        except RuntimeError:
+            return None

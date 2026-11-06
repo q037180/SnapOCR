@@ -18,6 +18,15 @@ from app import config
 
 _WHEEL_DELTA = 120  # Windows 标准滚轮一格的 delta，负值向下滚
 _MOUSEEVENTF_WHEEL = 0x0800
+_NOMOTION_DIFF = 8.0  # 整帧已存在时，两帧允许的平均灰度差
+_OVERLAP_DIFF = 18.0  # 重叠区允许的平均灰度差（含 1px 亚像素偏移/抗锯齿噪声）
+
+
+def _mean_diff(a: np.ndarray, b: np.ndarray) -> float:
+    """两段图像的平均灰度差；形状不一致直接判为完全不同。"""
+    if a.shape != b.shape:
+        return 255.0
+    return float(np.mean(cv2.absdiff(a, b)))
 
 if sys.platform == "win32":
     import ctypes
@@ -41,15 +50,26 @@ def _stitch_step(
     if a_h < strip or f_h < strip or a_h < 8 or f_h < 8:
         return np.vstack([acc, frame]), "append"
     tpl = cv2.cvtColor(frame[:strip], cv2.COLOR_BGR2GRAY)
+    if float(tpl.std()) < 1.0:
+        # 纯色（无纹理）顶部条：matchTemplate 会处处得 1.0，loc 退化成 (0,0)，
+        # 被误判成「整帧已存在」→ 连续 3 帧后长截图提前结束。直接追加兜底。
+        return np.vstack([acc, frame]), "append"
     search_zone = min(a_h, f_h + 150)
     region = cv2.cvtColor(acc[a_h - search_zone:], cv2.COLOR_BGR2GRAY)
     res = cv2.matchTemplate(region, tpl, cv2.TM_CCOEFF_NORMED)
     _, score, _, loc = cv2.minMaxLoc(res)
-    if score < threshold:
+    if not np.isfinite(score) or score < threshold:
         return np.vstack([acc, frame]), "append"
     overlap = max(0, search_zone - loc[1])  # 新帧顶部在累计图中已有的像素数
     if overlap >= f_h:
-        return acc, "nomotion"
+        # 模板匹配说整帧都已存在，但周期性内容（代码行、表格行）会出现
+        # 多个等分峰值，loc 退化到 (0,0) 也会给出 score=1.0。再比一次像素。
+        if _mean_diff(acc[a_h - f_h:], frame) <= _NOMOTION_DIFF:
+            return acc, "nomotion"
+        return np.vstack([acc, frame]), "append"
+    if overlap > 0 and _mean_diff(acc[a_h - overlap:], frame[:overlap]) > _OVERLAP_DIFF:
+        # 重叠区对不上：模板匹配被重复图案骗了，整帧追加比按错位置拼接安全
+        return np.vstack([acc, frame]), "append"
     return np.vstack([acc, frame[overlap:]]), "overlap"
 
 

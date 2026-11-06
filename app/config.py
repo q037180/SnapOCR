@@ -92,8 +92,12 @@ def is_valid_hotkey(value) -> bool:
 
     单键（如 a、f1）也能被 keyboard 库注册成功，但会劫持全系统按键，
     因此一律拒绝；纯修饰键（如 ctrl+shift）同理。
+    多段组合（QKeySequence 允许 "Ctrl+A, Ctrl+B"）keyboard 库不支持，
+    这里也一并拒绝，避免校验通过后注册时才失败。
     """
     if not isinstance(value, str):
+        return False
+    if "," in value or "，" in value:  # 多段组合：keyboard 只接受单段
         return False
     parts = [p.strip().lower() for p in value.split("+") if p.strip()]
     if len(parts) < 2:

@@ -37,7 +37,8 @@ def grab_virtual_screen() -> tuple[QImage, tuple[int, int]]:
 
 class CaptureOverlay(QWidget):
     captured = Signal(QImage)
-    regionSelected = Signal(int, int, int, int)  # mss 物理像素区域 (x, y, w, h)
+    # mss 物理像素区域 (x, y, w, h) + 逻辑矩形（Qt 控件摆位用，HiDPI 下二者不同）
+    regionSelected = Signal(int, int, int, int, object)
     cancelled = Signal()
 
     def __init__(self) -> None:
@@ -48,6 +49,7 @@ class CaptureOverlay(QWidget):
         self._shot, self._origin_phys = grab_virtual_screen()
         self._pixmap = QPixmap.fromImage(self._shot)
         self._origin = QPoint()
+        self._finished = False  # 已产出结果/已取消：closeEvent 不再补发 cancelled
         self._rubber = QRubberBand(QRubberBand.Rectangle, self)
         self._rubber.setStyleSheet(
             "background-color: rgba(47,111,237,60); border: 1px solid #2f6fed;"
@@ -109,8 +111,20 @@ class CaptureOverlay(QWidget):
     def keyPressEvent(self, e) -> None:  # noqa: N802
         if e.key() == Qt.Key_Escape:
             self._rubber.hide()
+            self._finished = True  # 主动取消：closeEvent 不要再补发一次
             self.close()
             self.cancelled.emit()
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        """被 Alt+F4 / 窗口管理器关掉时也要通知主窗口。
+
+        以前只有 Esc 会发 cancelled，其它方式关闭后主窗口的 _overlay 仍指向
+        已销毁的 C++ 对象，于是「立即截图」此后永久无响应（只能重启程序）。
+        """
+        if not self._finished:
+            self._finished = True
+            self.cancelled.emit()
+        super().closeEvent(event)
 
     def mss_region(self, rect: QRect) -> tuple[int, int, int, int]:
         """逻辑选区 → mss 物理像素区域 (x, y, w, h)，坐标相对截图左上角。
@@ -134,6 +148,9 @@ class CaptureOverlay(QWidget):
         # 长截图需要绝对物理坐标（mss 的 monitor 参数），补回虚拟桌面原点
         abs_x = x + self._origin_phys[0]
         abs_y = y + self._origin_phys[1]
+        # 控制条是 Qt 控件，要用逻辑坐标：125% 缩放下物理坐标会让它偏移到别处
+        logical = QRect(rect).translated(self._geo.topLeft())
+        self._finished = True
         self.close()
         self.captured.emit(crop)
-        self.regionSelected.emit(abs_x, abs_y, w, h)
+        self.regionSelected.emit(abs_x, abs_y, w, h, logical)

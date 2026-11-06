@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from app import config
-from app.core.exporter import export_text
+from app.core.exporter import ensure_text_suffix, export_text
 from app.core.translator import translate_text
 
 
@@ -76,9 +76,11 @@ class TranslateDialog(QDialog):
         row.addWidget(QLabel("目标语言："))
         self.cmb = QComboBox()
         self.cmb.addItems(list(config.TRANSLATE_LANGS.keys()))
+        # 默认目标语言若被改成了不在表里的值，不能抛 StopIteration 把窗口打不开
         default_label = next(
-            k for k, v in config.TRANSLATE_LANGS.items()
-            if v == config.TRANSLATE_TARGET_DEFAULT
+            (k for k, v in config.TRANSLATE_LANGS.items()
+             if v == config.TRANSLATE_TARGET_DEFAULT),
+            next(iter(config.TRANSLATE_LANGS)),
         )
         self.cmb.setCurrentText(default_label)
         row.addWidget(self.cmb)
@@ -141,7 +143,7 @@ class TranslateDialog(QDialog):
             self._set_status("输入或粘贴文本后点击翻译")
 
     def _translate_current(self) -> None:
-        if self._worker is not None and self._worker.isRunning():
+        if self.active_worker() is not None:
             return
         text = self.src.toPlainText().strip()
         if not text:
@@ -153,7 +155,23 @@ class TranslateDialog(QDialog):
         self._worker = TranslateWorker(text, target)
         self._worker.done.connect(self._on_done)
         self._worker.fail.connect(self._on_fail)
+        worker = self._worker
+        worker.finished.connect(lambda w=worker: self._on_worker_finished(w))
         self._worker.start()
+
+    def _on_worker_finished(self, w) -> None:
+        """线程结束后释放并清空引用：否则每次翻译都留下一个 QThread 对象。"""
+        if self._worker is w:
+            self._worker = None
+        w.deleteLater()
+
+    def active_worker(self):
+        """仍在运行的翻译线程（主窗口退出时需要等它结束，否则进程会 abort）。"""
+        w = self._worker
+        try:
+            return w if w is not None and w.isRunning() else None
+        except RuntimeError:
+            return None
 
     def _on_done(self, text: str) -> None:
         self.btn.setEnabled(True)
@@ -177,12 +195,13 @@ class TranslateDialog(QDialog):
             self._set_status("暂无译文可导出", error=True)
             return
         default = os.path.join(os.path.expanduser("~"), "译文.docx")
-        path, _ = QFileDialog.getSaveFileName(
+        path, selected = QFileDialog.getSaveFileName(
             self, "导出译文", default,
             "Word 文档 (*.docx);;文本文件 (*.txt);;PDF 文档 (*.pdf)",
         )
         if not path:
             return
+        path = ensure_text_suffix(path, selected)
         try:
             export_text(path, text)
         except Exception as exc:  # noqa: BLE001

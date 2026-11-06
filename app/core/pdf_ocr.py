@@ -5,8 +5,30 @@
 """
 from __future__ import annotations
 
+import math
+
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QImage
+
+# 单页渲染上限：A0 图纸 / 海报尺寸页面按 2 倍渲染会瞬间吃掉几百 MB
+# （实测 4000x5000pt 页面 → 8000x10000px，RSS +306 MB，随后 OCR 也可能 OOM）。
+# 超过上限时等比降采样：清晰度略降，但不会把内存打爆。
+MAX_RENDER_SIDE = 4096
+MAX_RENDER_PIXELS = 16_000_000
+
+
+def clamp_render_size(width_pt: float, height_pt: float, scale: float):
+    """页面点数 → 实际渲染像素尺寸（受 MAX_RENDER_* 约束）。"""
+    from PySide6.QtCore import QSize
+
+    w = max(1.0, width_pt * scale)
+    h = max(1.0, height_pt * scale)
+    factor = 1.0
+    if max(w, h) > MAX_RENDER_SIDE:
+        factor = min(factor, MAX_RENDER_SIDE / max(w, h))
+    if w * h * factor * factor > MAX_RENDER_PIXELS:
+        factor = min(factor, math.sqrt(MAX_RENDER_PIXELS / (w * h)))
+    return QSize(max(1, int(w * factor)), max(1, int(h * factor)))
 
 
 class PdfWorker(QThread):
@@ -54,7 +76,7 @@ class PdfWorker(QThread):
                 size = doc.pagePointSize(i)
                 # render(page, imageSize: QSize)：按目标像素尺寸渲染，
                 # 2.0 倍 ≈ 144dpi；必须白底填充（默认透明会被 OCR 当黑页）
-                target = size.toSize() * self._scale
+                target = clamp_render_size(size.width(), size.height(), self._scale)
                 image = doc.render(
                     i, target, QPdfDocumentRenderOptions(),
                     QImage.Format_ARGB32, QColor("white"),

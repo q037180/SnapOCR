@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QRect, Qt, Signal
 from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -26,10 +26,17 @@ class LongShotBar(QWidget):
     stopClicked = Signal()
     cancelClicked = Signal()
 
-    def __init__(self, region: tuple[int, int, int, int]) -> None:
+    def __init__(self, region: tuple[int, int, int, int],
+                 logical: QRect | None = None) -> None:
+        """region 是 mss 物理像素区域，logical 是同一选区的逻辑坐标。
+
+        控件摆位必须用逻辑坐标：Windows 125% 缩放下二者差 1.25 倍，
+        直接用物理坐标会让控制条跑到离选区很远的地方（甚至屏幕外）。
+        """
         super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_DeleteOnClose)
-        x, y, w, h = region
+        self._closing = False  # 主动关闭（完成/失败）时不再补发取消
+        self._rect = QRect(logical) if logical is not None else QRect(*region)
 
         lay = QHBoxLayout(self)
         lay.setContentsMargins(10, 5, 10, 5)
@@ -56,14 +63,33 @@ class LongShotBar(QWidget):
             " QPushButton:hover { background: #2559c8; }"
         )
 
-        # 位置：默认在选区下方，放不下则移到选区上方，并夹在屏幕内
+        # 位置：默认在选区下方，放不下则移到选区上方，并夹在选区所在屏幕内
         self.adjustSize()
-        scr = QGuiApplication.primaryScreen().availableGeometry()
-        bx = min(max(x, scr.left()), scr.right() - self.width() + 1)
-        by = y + h + 8
+        screen = QGuiApplication.screenAt(self._rect.center()) or QGuiApplication.primaryScreen()
+        scr = screen.availableGeometry() if screen is not None else QRect(0, 0, 1920, 1080)
+        bx = max(scr.left(), min(max(self._rect.x(), scr.left()),
+                                 scr.right() - self.width() + 1))
+        by = self._rect.y() + self._rect.height() + 8
         if by + self.height() > scr.bottom():
-            by = max(scr.top(), y - self.height() - 8)
+            by = max(scr.top(), self._rect.y() - self.height() - 8)
         self.move(bx, by)
+
+    def dismiss(self) -> None:
+        """主动关闭（采集完成/失败/已取消）：不触发 cancelClicked。
+
+        已经在关闭流程中（closeEvent 里回调过来的）就直接返回，避免递归 close。
+        """
+        if self._closing:
+            return
+        self._closing = True
+        self.close()
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        """被 Alt+F4 关掉时按「取消」处理，否则主窗口会一直以为会话还在。"""
+        if not self._closing:
+            self._closing = True
+            self.cancelClicked.emit()
+        super().closeEvent(event)
 
     def set_running(self, running: bool) -> None:
         self.btn_start.setVisible(not running)

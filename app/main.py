@@ -17,7 +17,8 @@ def _notify_running_instance() -> bool:
     """已有实例在运行：请求它把窗口显示出来，本进程直接退出。"""
     sock = QLocalSocket()
     sock.connectToServer(_SERVER_NAME)
-    if not sock.waitForConnected(300):
+    # 首个实例偶尔正忙于主线程操作（弹窗、保存），给足 0.8 秒再判定「没在跑」
+    if not sock.waitForConnected(800):
         return False
     sock.write(b"show\n")
     sock.flush()
@@ -31,7 +32,11 @@ def _start_single_instance_server(window: MainWindow) -> QLocalServer:
     QLocalServer.removeServer(_SERVER_NAME)  # 清掉上次异常退出残留的名字
     server = QLocalServer()
     server.setSocketOptions(QLocalServer.SocketOption.UserAccessOption)
-    server.listen(_SERVER_NAME)
+    if not server.listen(_SERVER_NAME):
+        # 端口名被占用/权限异常：再清一次重试；仍失败也不影响主功能，
+        # 只是没有单实例保护（不能让进程因此起不来）
+        QLocalServer.removeServer(_SERVER_NAME)
+        server.listen(_SERVER_NAME)
 
     def _on_new_connection() -> None:
         conn = server.nextPendingConnection()

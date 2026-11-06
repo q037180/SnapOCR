@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import statistics
 import threading
 
 from app import config
@@ -174,15 +175,22 @@ class OCREngine:
     def __init__(self) -> None:
         self._engine = None
         self._params_key: tuple | None = None
+        # 版本号：reload() 之后，正在初始化中的线程不要把旧参数的引擎写回缓存
+        self._generation = 0
 
     def warmup(self) -> None:
         self._ensure_loaded()
 
     def reload(self) -> None:
-        """设置（语言/角度分类）变更后重建引擎；下次识别时生效。"""
-        with _LOAD_LOCK:
-            self._engine = None
-            self._params_key = None
+        """设置（语言/角度分类）变更后重建引擎；下次识别时生效。
+
+        这里**不能**去抢 _LOAD_LOCK：预热线程初始化模型要 1-3 秒且一直持锁，
+        主线程若在启动后立刻改设置，会整窗冻结那么久。清空引用是原子的，
+        并发安全交给 _ensure_loaded 的双检锁 + generation 校验。
+        """
+        self._generation += 1
+        self._engine = None
+        self._params_key = None
 
     def _ensure_loaded(self):
         # 双检锁：预热线程与识别线程可能并发首次初始化，
@@ -195,6 +203,8 @@ class OCREngine:
             with _LOAD_LOCK:
                 if self._engine is None or self._params_key != key:
                     from rapidocr import RapidOCR  # 延迟导入，加快启动
+
+                    gen = self._generation
 
                     # Det.limit_type=max + 960：检测输入最长边压到 960。
                     # 全屏 1080p 实测 16s → 7.3s（约 2 倍提速），文本召回基本无损；
@@ -216,8 +226,14 @@ class OCREngine:
                         params["Rec.lang_type"] = lang
                     if gpu:
                         params.update(_gpu_params())
-                    self._engine = RapidOCR(params=params)
-                    self._params_key = key
+                    engine = RapidOCR(params=params)
+                    if gen == self._generation:
+                        # 初始化期间没有触发 reload：写回缓存，后续调用复用
+                        self._engine = engine
+                        self._params_key = key
+                    # 否则说明用户在初始化过程中改了设置：这次构造的引擎只服务
+                    # 当前这一次调用，不写回缓存，下次调用按新参数重建
+                    return engine
         return self._engine
 
     def recognize_image(self, image) -> str:
@@ -483,51 +499,100 @@ def _cluster_sorted(values, tol: float) -> list[list[float]]:
     return clusters
 
 
-def _grid_from_words(words) -> list[list[str]]:
-    """按 y 聚类成行；行内按列间隙切分；列边界全局对齐后输出矩阵。"""
-    import statistics
+def _cells_from_row(row_words, med_h: float) -> list[list]:
+    """把同一行的词按列间隙切成单元格：[[left, right, [文本...]], ...]。
 
-    med_h = statistics.median(w[3] for w in words)
+    间隙阈值取「行高中位数 × 0.9」：同一个单元格内的字距远小于行高，
+    而相邻列之间的空白通常至少有一行高。
+    """
+    cells: list[list] = []
+    for w in sorted(row_words, key=lambda it: it[0]):
+        if cells and w[0] - cells[-1][1] <= _CELL_GAP_RATIO * med_h:
+            cells[-1][1] = max(cells[-1][1], w[1])
+            cells[-1][2].append(w[4])
+        else:
+            cells.append([w[0], w[1], [w[4]]])
+    return cells
+
+
+_CELL_GAP_RATIO = 0.9
+
+
+def _column_bands(spans, tol: float) -> list[list[float]]:
+    """把各行的单元格水平区段并成全局列带（区间合并）。
+
+    以前用「行内间隙中点」当列边界，某行中间缺一格时那道大间隙会在
+    中间凭空多切出一列，导致整行数据左移、插进错误的列。改为按实际
+    单元格区间做合并：只有真正重叠/相邻的区段才算同一列。
+    """
+    bands: list[list[float]] = []
+    for left, right in sorted(spans):
+        for b in bands:
+            if left <= b[1] + tol and right >= b[0] - tol:
+                b[0], b[1] = min(b[0], left), max(b[1], right)
+                break
+        else:
+            bands.append([left, right])
+    # 合并过程中可能让两个列带变近/重叠，再收敛一轮
+    bands.sort()
+    merged: list[list[float]] = []
+    for b in bands:
+        if merged and b[0] <= merged[-1][1] + tol:
+            merged[-1][1] = max(merged[-1][1], b[1])
+        else:
+            merged.append(b)
+    return merged
+
+
+def _best_column(bands, left: float, right: float) -> int:
+    """单元格归属哪一列：水平重叠最多者优先，否则取中心最近的列。"""
+    best, best_overlap = 0, 0.0
+    for i, (bl, br) in enumerate(bands):
+        overlap = min(right, br) - max(left, bl)
+        if overlap > best_overlap:
+            best, best_overlap = i, overlap
+    if best_overlap > 0:
+        return best
+    cx = (left + right) / 2.0
+    return min(
+        range(len(bands)),
+        key=lambda i: abs((bands[i][0] + bands[i][1]) / 2.0 - cx),
+    )
+
+
+def _grid_from_words(words) -> list[list[str]]:
+    """按 y 聚类成行 → 行内按间隙切单元格 → 全局列带对齐 → 输出矩阵。
+
+    输出矩阵每行长度都等于列数，缺字的单元格留空串：
+    否则把右侧单元格往左顶，导出 Excel 后整列错位。
+    """
+    med_h = statistics.median(w[3] for w in words) or 1.0
     # 1) 行聚类（用行中心，容差同 _group_lines 的思路）
     row_clusters = _cluster_sorted([w[2] for w in words], med_h * 0.6)
     row_centers = [sum(c) / len(c) for c in row_clusters]
-    rows: list[list[tuple]] = [[] for _ in row_clusters]
+    rows_words: list[list[tuple]] = [[] for _ in row_clusters]
     for w in words:
         idx = min(range(len(row_centers)), key=lambda i: abs(row_centers[i] - w[2]))
-        rows[idx].append(w)
-    for r in rows:
-        r.sort(key=lambda w: w[0])
+        rows_words[idx].append(w)
 
-    # 2) 收集行内列间隙中点（间隙 > 行高中位数视为分列）
-    gap_mids: list[float] = []
-    for r in rows:
-        for a, b in zip(r, r[1:]):
-            gap = b[0] - a[1]
-            if gap > med_h * 0.9:
-                gap_mids.append((a[1] + b[0]) / 2.0)
-    boundaries: list[float] = []
-    if gap_mids:
-        tol = max(med_h * 0.5, 4.0)
-        for c in _cluster_sorted(gap_mids, tol):
-            boundaries.append(sum(c) / len(c))
+    # 2) 每行切成单元格，收集全部水平区段
+    rows_cells = [_cells_from_row(r, med_h) for r in rows_words]
+    spans = [(c[0], c[1]) for cells in rows_cells for c in cells]
+    tol = max(med_h * _CELL_GAP_RATIO, 4.0)
+    bands = _column_bands(spans, tol)
+    n_cols = len(bands)
 
-    def col_index(cx: float) -> int:
-        return sum(1 for b in boundaries if b < cx)
-
-    # 3) 填充矩阵：同一单元格内的词按 x 顺序拼接
-    n_cols = len(boundaries) + 1
+    # 3) 填充矩阵：单元格按列带落位，同一格内的文本按 x 顺序拼接
     grid: list[list[str]] = []
-    for r in rows:
-        cells: dict[int, list[str]] = {}
-        for w in r:
-            cells.setdefault(col_index((w[0] + w[1]) / 2.0), []).append(w)
-        row = [" ".join(w[4] for w in sorted(ws, key=lambda w: w[0]))
-               for _, ws in sorted(cells.items())]
-        if config.CJK_COMPACT:
-            # 字级 word_box 会把「姓名」切成「姓」「名」，直接空格拼接会导出成
-            # 「姓 名」。这里复用智能排版去掉汉字之间的空格（英文词间空格保留）。
-            row = [compact_cjk(c) for c in row]
-        if n_cols > 1:
-            row += [""] * (n_cols - len(row))  # 右侧空单元格补齐
+    for cells in rows_cells:
+        row = [""] * n_cols
+        for left, right, texts in cells:
+            text = " ".join(texts)
+            if config.CJK_COMPACT:
+                # 字级 word_box 会把「姓名」切成「姓」「名」，直接空格拼接会导出成
+                # 「姓 名」。这里复用智能排版去掉汉字之间的空格（英文词间空格保留）。
+                text = compact_cjk(text)
+            idx = _best_column(bands, left, right)
+            row[idx] = f"{row[idx]} {text}".strip() if row[idx] else text
         grid.append(row)
     return grid
