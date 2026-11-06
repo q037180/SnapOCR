@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import (
@@ -40,13 +41,15 @@ from app import config
 from app.core.engine import compact_cjk, get_engine
 from app.core.exporter import export_text, export_xlsx
 from app.core.pdf_ocr import PdfWorker
-from app.core.stitcher import StitchWorker
 from app.ui.capture_overlay import CaptureOverlay
 from app.ui.longshot import LongShotBar, LongShotDialog
 from app.ui.pin_window import PinWindow
 from app.ui.preview_popup import PreviewPopup
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.translate_dialog import TranslateDialog
+
+if TYPE_CHECKING:  # 仅用于类型标注；cv2/mss 在首次长截图时才真正导入
+    from app.core.stitcher import StitchWorker
 
 
 def make_icon() -> QIcon:
@@ -202,14 +205,25 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self._build_tray()
+        self._preload_wanted = preload
+        self._preload: EnginePreloader | None = None
+        self._services_started = False
+        # 热键注册（keyboard 库约 0.5s）和模型预热都不在构造里做：
+        # 由 main() 在窗口首次绘制之后调用 start_services()，窗口才能秒开
+
+    def start_services(self) -> None:
+        """窗口显示之后再做后台活儿：注册全局热键 + 预热 OCR 模型（幂等）。"""
+        if self._services_started:
+            return
+        self._services_started = True
+        QTimer.singleShot(0, self._deferred_start)
+
+    def _deferred_start(self) -> None:
         self._register_hotkey()
         if getattr(self, "_hotkey_error", ""):
             self.statusBar().showMessage(self._hotkey_error, 15000)
-
-        self._preload: EnginePreloader | None = (
-            EnginePreloader() if preload else None
-        )
-        if self._preload is not None:
+        if self._preload_wanted and self._preload is None:
+            self._preload = EnginePreloader()
             self._preload.start()
 
     # ---- UI ----
@@ -684,6 +698,8 @@ class MainWindow(QMainWindow):
         self._overlay = None
         self._capture_translate = False
         self._capture_long = False
+        from app.core.stitcher import StitchWorker  # 延迟导入：cv2 + mss 约 0.35s
+
         self._longshot_worker = StitchWorker((x, y, w, h))
         self._longshot_worker.progress.connect(self._on_longshot_progress)
         self._longshot_worker.done.connect(self._on_longshot_done)

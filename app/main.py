@@ -19,6 +19,10 @@ def main() -> None:
 
     if "--smoke" in sys.argv:
         QTimer.singleShot(1500, app.quit)
+    else:
+        # 先让首帧画出来，再注册全局热键、预热识别模型：
+        # 窗口秒开，这两件重活挪到用户看到界面之后
+        QTimer.singleShot(150, window.start_services)
 
     sys.exit(app.exec())
 
