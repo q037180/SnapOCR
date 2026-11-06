@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import bisect
 import os
 import re
 import shutil
@@ -517,6 +518,15 @@ def _cells_from_row(row_words, med_h: float) -> list[list]:
 
 _CELL_GAP_RATIO = 0.9
 
+# 全局「空白缝」判定：某个 x 位置如果全表没有任何一行有文字跨越，它就是列分隔缝。
+# 缝宽只取决于「有没有字压在上面」，与字高无关——所以列间距比一个字高还窄的
+# 密集表格同样能切对（旧的「行内间隙 > 0.9 倍字高」做不到这一点）。
+_MIN_CORRIDOR_PX = 1.5
+# 允许少数行（表头标题、跨列表格）压过缝隙；超过这个比例就不算「贯穿全表的缝」
+_CORRIDOR_ROW_TOLERANCE = 0.25
+# 列数上限：超过说明 word box 噪声太多，切出来的不是表格
+_MAX_COLUMNS = 16
+
 
 def _column_bands(spans, tol: float) -> list[list[float]]:
     """把各行的单元格水平区段并成全局列带（区间合并）。
@@ -560,29 +570,91 @@ def _best_column(bands, left: float, right: float) -> int:
     )
 
 
-def _grid_from_words(words) -> list[list[str]]:
-    """按 y 聚类成行 → 行内按间隙切单元格 → 全局列带对齐 → 输出矩阵。
-
-    输出矩阵每行长度都等于列数，缺字的单元格留空串：
-    否则把右侧单元格往左顶，导出 Excel 后整列错位。
-    """
-    med_h = statistics.median(w[3] for w in words) or 1.0
-    # 1) 行聚类（用行中心，容差同 _group_lines 的思路）
-    row_clusters = _cluster_sorted([w[2] for w in words], med_h * 0.6)
-    row_centers = [sum(c) / len(c) for c in row_clusters]
-    rows_words: list[list[tuple]] = [[] for _ in row_clusters]
+def _rows_by_y(words, med_h: float) -> list[list[tuple]]:
+    """按 y 中心聚成表格行。"""
+    if not words:
+        return []
+    clusters = _cluster_sorted([w[2] for w in words], med_h * 0.6)
+    centers = [sum(c) / len(c) for c in clusters]
+    rows: list[list[tuple]] = [[] for _ in clusters]
     for w in words:
-        idx = min(range(len(row_centers)), key=lambda i: abs(row_centers[i] - w[2]))
-        rows_words[idx].append(w)
+        rows[min(range(len(centers)), key=lambda i: abs(centers[i] - w[2]))].append(w)
+    return rows
 
-    # 2) 每行切成单元格，收集全部水平区段
-    rows_cells = [_cells_from_row(r, med_h) for r in rows_words]
+
+def _corridor_bounds(rows, med_h: float) -> list[float]:
+    """找出贯穿全表的空白缝，返回列边界（缝中线）列表。
+
+    判定方式是**逐 x 位置**做的：把所有字框的左右边缘当候选点，相邻两点之间
+    的横坐标区间如果没有任何一行有文字跨越，就是一道缝。这样列间距再窄也能
+    切出来——只要那里真的是空白，跟字高没有关系（旧算法要求间隙大于 0.9 倍
+    字高，密集排版的表格会被整片并成一列）。
+    """
+    rows = [r for r in rows if r]
+    if len(rows) < 2:
+        return []  # 只有一行时无法验证「全表都没有字」，退回旧算法
+    spans: list[tuple[list[float], list[float]]] = []
+    for r in rows:
+        s = sorted((w[0], w[1]) for w in r)
+        spans.append((s, [it[0] for it in s]))
+    edges = sorted(
+        {w[0] for r in rows for w in r} | {w[1] for r in rows for w in r}
+    )
+    if len(edges) < 4:
+        return []
+    min_gap = max(_MIN_CORRIDOR_PX, med_h * 0.10)
+    allowed = int(len(rows) * _CORRIDOR_ROW_TOLERANCE)
+    bounds: list[float] = []
+    for a, b in zip(edges, edges[1:]):
+        if b - a < min_gap:
+            continue
+        covered = 0
+        for s, starts in spans:
+            i = bisect.bisect_right(starts, a) - 1
+            if i >= 0 and s[i][1] > a:  # 这一行有文字压在这个 x 上
+                covered += 1
+                if covered > allowed:
+                    break
+        if covered <= allowed:
+            bounds.append((a + b) / 2.0)
+    if len(bounds) + 1 > _MAX_COLUMNS:
+        return []
+    return bounds
+
+
+def _grid_by_bounds(rows, bounds: list[float]) -> list[list[str]]:
+    """按全局列边界把每行的词落进对应单元格。"""
+    n_cols = len(bounds) + 1
+    grid: list[list[str]] = []
+    for row in rows:
+        cells = [""] * n_cols
+        for w in sorted(row, key=lambda it: it[0]):
+            left_i = bisect.bisect_right(bounds, w[0])
+            right_i = bisect.bisect_right(bounds, w[1])
+            if left_i != right_i:
+                # 字框跨过了列缝（合并标题「合计」这类）：落到它占的第一列，
+                # 否则按中心点归位会被塞进中间那列，导出后看着像错行
+                idx = min(n_cols - 1, left_i)
+            else:
+                idx = min(n_cols - 1, bisect.bisect_right(bounds, (w[0] + w[1]) / 2.0))
+            cells[idx] = f"{cells[idx]} {w[4]}".strip() if cells[idx] else w[4]
+        if config.CJK_COMPACT:
+            cells = [compact_cjk(c) for c in cells]
+        grid.append(cells)
+    return grid
+
+
+def _grid_by_row_gaps(rows, med_h: float) -> list[list[str]]:
+    """旧算法兜底：行内按间隙切单元格，再用区间合并对齐成全局列带。
+
+    找不到贯穿全表的空白缝时（普通文本、某行文字横跨多列且被识别成一个框）
+    才走这里。
+    """
+    rows_cells = [_cells_from_row(r, med_h) for r in rows]
     spans = [(c[0], c[1]) for cells in rows_cells for c in cells]
     tol = max(med_h * _CELL_GAP_RATIO, 4.0)
     bands = _column_bands(spans, tol)
     n_cols = len(bands)
-
-    # 3) 填充矩阵：单元格按列带落位，同一格内的文本按 x 顺序拼接
     grid: list[list[str]] = []
     for cells in rows_cells:
         row = [""] * n_cols
@@ -596,3 +668,18 @@ def _grid_from_words(words) -> list[list[str]]:
             row[idx] = f"{row[idx]} {text}".strip() if row[idx] else text
         grid.append(row)
     return grid
+
+
+def _grid_from_words(words) -> list[list[str]]:
+    """按 y 聚类成行 → 找全局列缝 → 输出矩阵。
+
+    输出矩阵每行长度都等于列数，缺字的单元格留空串：
+    否则把右侧单元格往左顶，导出 Excel 后整列错位。
+    """
+    med_h = statistics.median(w[3] for w in words) or 1.0
+    rows = _rows_by_y(words, med_h)
+    bounds = _corridor_bounds(rows, med_h)
+    if bounds:
+        return _grid_by_bounds(rows, bounds)
+    return _grid_by_row_gaps(rows, med_h)
+
