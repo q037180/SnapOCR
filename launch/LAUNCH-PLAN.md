@@ -35,15 +35,15 @@ Offline screenshot OCR for dark IDEs and dark-mode pages — auto-inverts dark c
 
 ## 1. Release 资产（已完成，留作核对）
 
-`v1.0.0` Release 里这 5 个资产已全部在线，SHA-256 明文也已在说明里：
+`v1.0.1`（2026-11-06）已由 CI 自动产出并挂到 Release：`SnapOCR.exe`（155 MB）、`SnapOCR-v1.0.1-win64.7z`（115 MB）、两个 `.sha256`，校验值与 GitHub 记录的资产 digest 一致。`v1.0.0` 的 Release 保留原样，图片素材仍从它直链引用：
 
 | 文件 | 用途 |
 | --- | --- |
-| `dist/SnapOCR-v1.0.0-win64.7z` | onedir 绿色包，解压一次、启动免自解压 |
-| `dist/SnapOCR-v1.0.0-win64.7z.sha256` | 绿色包校验值 |
-| `dist/SnapOCR.exe.sha256` | 单文件 exe 校验值 |
-| `assets/compare-dark-ui.png` | 投稿首图（深色截图真实前后对比） |
-| `assets/hero-15s.gif` | 15 秒串联演示 |
+| `SnapOCR-v1.0.1-win64.7z` | onedir 绿色包，解压一次、启动免自解压（**对外主推**） |
+| `SnapOCR.exe` | 单文件版 |
+| `*.sha256` | 对应校验值 |
+| `assets/compare-dark-ui.png` | 投稿首图（深色截图真实前后对比，v1.0.0 Release 直链） |
+| `assets/hero-15s.gif` | 15 秒串联演示（v1.0.0 Release 直链） |
 
 下次打 tag 发版时，CI 会自动产出 exe + `SnapOCR-<tag>-win64.7z` + 两个 `.sha256`，详见 `.github/workflows/release.yml`。
 
