@@ -109,6 +109,8 @@
 
 - 内置历史记录，关键词搜索即时过滤；单击条目浮窗预览，双击再次复制
 - 「导出所选...」一键导出 **txt / docx / pdf / md**；表格结果可保存 **xlsx**
+- 大批量导出在后台线程进行，界面不冻结；内容超过 20 万字会先提示预计耗时，导出中可取消
+- 历史写入采用「临时文件 + 原子替换」：断电或磁盘写满不会把已有记录截断成半个文件
 
 ![历史预览演示](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/preview-hover.gif)
 
@@ -123,6 +125,10 @@
 | 功能 | 二维码、表格识别、PDF识别、截图贴图、水印关键词过滤 |
 
 配置持久化于 `%APPDATA%\SnapOCR\settings.json`。
+
+程序是**单实例**的：再次双击（或从另一个快捷方式启动）不会开出第二个窗口，而是把已经在运行的那个窗口唤到前台——避免两份历史互相覆盖、一次热键弹出两个截图遮罩。需要刻意多开排查问题时可以加 `--multi` 参数。
+
+配置文件被手工改坏（`history.json` / `settings.json` 结构不对）也不会导致「双击没反应」：程序会跳过损坏的历史记录并在状态栏提示，非法的快捷键值自动回落到默认的 `Ctrl+Alt+Q`。
 
 ## 安装
 
@@ -341,7 +347,7 @@ OCR runs locally: no screenshot or recognized text is uploaded, no telemetry, no
 - A 160 MB single-file exe unpacks on every launch — the onedir 7z build starts directly and is the recommended download.
 - No automatic updater yet; check Releases for new versions.
 - Only the Simplified Chinese recognition model is bundled; the other four languages need a one-time download on first use.
-- Multi-monitor handling and formula recognition are on the roadmap.
+- Mixed-DPI multi-monitor setups may show a slightly scaled capture overlay (selection still maps to the correct pixels).
 
 ### Contributing & feedback
 

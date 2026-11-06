@@ -7,13 +7,32 @@ from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter, QPen, QPixm
 from PySide6.QtWidgets import QRubberBand, QWidget
 
 
-def grab_primary_screen() -> QImage:
-    """用 mss 抓取主屏（物理像素），返回带 devicePixelRatio 的 QImage。"""
+def virtual_geometry() -> QRect:
+    """所有屏幕的并集（逻辑坐标），多屏时覆盖整个虚拟桌面。"""
+    rect = QRect()
+    for screen in QGuiApplication.screens():
+        rect = rect.united(screen.geometry())
+    if rect.isNull():
+        screen = QGuiApplication.primaryScreen()
+        rect = screen.geometry() if screen is not None else QRect(0, 0, 1920, 1080)
+    return rect
+
+
+def grab_virtual_screen() -> tuple[QImage, tuple[int, int]]:
+    """用 mss 抓取整个虚拟桌面（物理像素）。
+
+    返回 (带 devicePixelRatio 的 QImage, 虚拟桌面左上角的物理坐标)：
+    mss.monitors[0] 是所有显示器并集，副屏在主屏左侧/上方时坐标可能为负。
+    """
     with mss.mss() as sct:
-        raw = sct.grab(sct.monitors[1])
+        mon = sct.monitors[0]
+        raw = sct.grab(mon)
     img = QImage(raw.bgra, raw.width, raw.height, raw.width * 4, QImage.Format_ARGB32).copy()
-    img.setDevicePixelRatio(QGuiApplication.primaryScreen().devicePixelRatio())
-    return img
+    geo = virtual_geometry()
+    if geo.width() > 0:
+        # 统一缩放比：单屏时等于真实 DPR；混合 DPI 多屏只能取等效值
+        img.setDevicePixelRatio(raw.width / geo.width())
+    return img, (int(mon["left"]), int(mon["top"]))
 
 
 class CaptureOverlay(QWidget):
@@ -25,7 +44,8 @@ class CaptureOverlay(QWidget):
         super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.setCursor(Qt.CrossCursor)
-        self._shot = grab_primary_screen()
+        self._geo = virtual_geometry()
+        self._shot, self._origin_phys = grab_virtual_screen()
         self._pixmap = QPixmap.fromImage(self._shot)
         self._origin = QPoint()
         self._rubber = QRubberBand(QRubberBand.Rectangle, self)
@@ -34,7 +54,7 @@ class CaptureOverlay(QWidget):
         )
 
     def start(self) -> None:
-        self.setGeometry(QGuiApplication.primaryScreen().geometry())
+        self.setGeometry(self._geo)
         self.show()
         self.raise_()
         self.activateWindow()
@@ -93,13 +113,16 @@ class CaptureOverlay(QWidget):
             self.cancelled.emit()
 
     def mss_region(self, rect: QRect) -> tuple[int, int, int, int]:
-        """逻辑选区 → mss 物理像素区域 (x, y, w, h)。
+        """逻辑选区 → mss 物理像素区域 (x, y, w, h)，坐标相对截图左上角。
 
         四周外扩 4 物理像素：贴边文字被裁掉一半常导致整行漏识别。
         """
         dpr = self._shot.devicePixelRatio()
+        # 虚拟桌面原点可能不在 (0,0)（副屏在主屏左侧/上方），要换算成相对截图的偏移
+        off_x = self._origin_phys[0] - int(self._geo.x() * dpr)
+        off_y = self._origin_phys[1] - int(self._geo.y() * dpr)
         src = QRect(
-            int(rect.x() * dpr), int(rect.y() * dpr),
+            int(rect.x() * dpr) + off_x, int(rect.y() * dpr) + off_y,
             int(rect.width() * dpr), int(rect.height() * dpr),
         )
         src = src.adjusted(-4, -4, 4, 4).intersected(self._shot.rect())
@@ -108,6 +131,9 @@ class CaptureOverlay(QWidget):
     def _finish(self, rect: QRect) -> None:
         x, y, w, h = self.mss_region(rect)
         crop = self._shot.copy(QRect(x, y, w, h))
+        # 长截图需要绝对物理坐标（mss 的 monitor 参数），补回虚拟桌面原点
+        abs_x = x + self._origin_phys[0]
+        abs_y = y + self._origin_phys[1]
         self.close()
         self.captured.emit(crop)
-        self.regionSelected.emit(x, y, w, h)
+        self.regionSelected.emit(abs_x, abs_y, w, h)

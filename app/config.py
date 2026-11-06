@@ -64,11 +64,55 @@ def _load_settings() -> dict:
 
 
 def save_settings(data: dict) -> None:
-    """合并写入用户设置。"""
+    """合并写入用户设置（先写临时文件再原子替换，避免写一半把配置截断）。"""
     merged = {**_load_settings(), **data}
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-        json.dump(merged, f, ensure_ascii=False, indent=1)
+    tmp = SETTINGS_FILE + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(merged, f, ensure_ascii=False, indent=1)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, SETTINGS_FILE)
+    except OSError:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
+
+# ---- 设置值类型兜底：settings.json 被手工改坏时不能让程序起不来 ----
+_HOTKEY_MODS = {"ctrl", "control", "alt", "shift", "windows", "win", "cmd", "super", "meta"}
+
+
+def is_valid_hotkey(value) -> bool:
+    """热键是否合法：必须是「修饰键 + 普通键」的组合。
+
+    单键（如 a、f1）也能被 keyboard 库注册成功，但会劫持全系统按键，
+    因此一律拒绝；纯修饰键（如 ctrl+shift）同理。
+    """
+    if not isinstance(value, str):
+        return False
+    parts = [p.strip().lower() for p in value.split("+") if p.strip()]
+    if len(parts) < 2:
+        return False
+    has_mod = any(p in _HOTKEY_MODS for p in parts)
+    has_key = any(p not in _HOTKEY_MODS for p in parts)
+    return has_mod and has_key
+
+
+def _hotkey_or(value, default: str) -> str:
+    return value if is_valid_hotkey(value) else default
+
+
+def _bool_or(value, default: bool) -> bool:
+    return value if isinstance(value, bool) else default
+
+
+def _text_or(value, default: str) -> str:
+    return value if isinstance(value, str) else default
 
 
 # ---- 长截图 ----
@@ -80,24 +124,24 @@ LONGSHOT_MAX_HEIGHT = 30000  # 拼接结果最大高度（像素）
 
 # 用户自定义快捷键（settings.json）覆盖上方默认值；必须放在所有热键定义之后
 _settings = _load_settings()
-HOTKEY = _settings.get("hotkey_capture", HOTKEY)
-TRANSLATE_HOTKEY = _settings.get("hotkey_translate", TRANSLATE_HOTKEY)
-HOTKEY_LONG = _settings.get("hotkey_long", HOTKEY_LONG)
+HOTKEY = _hotkey_or(_settings.get("hotkey_capture"), HOTKEY)
+TRANSLATE_HOTKEY = _hotkey_or(_settings.get("hotkey_translate"), TRANSLATE_HOTKEY)
+HOTKEY_LONG = _hotkey_or(_settings.get("hotkey_long"), HOTKEY_LONG)
 
-# OCR 设置同样支持 settings.json 持久化
-OCR_LANG = _settings.get("ocr_lang", OCR_LANG)
+# OCR 设置同样支持 settings.json 持久化（逐项校验类型，坏值回落默认）
+OCR_LANG = _text_or(_settings.get("ocr_lang"), OCR_LANG)
 if OCR_LANG not in OCR_LANGS.values():
     OCR_LANG = "ch"
-OCR_USE_CLS = bool(_settings.get("ocr_use_cls", OCR_USE_CLS))
-OCR_ENHANCE = bool(_settings.get("ocr_enhance", OCR_ENHANCE))
-OCR_MERGE_PARA = bool(_settings.get("ocr_para", OCR_MERGE_PARA))
-OCR_QR = bool(_settings.get("ocr_qr", OCR_QR))
-OCR_GPU = bool(_settings.get("ocr_gpu", OCR_GPU))
-OCR_FILTER_KW = bool(_settings.get("ocr_filter_kw", OCR_FILTER_KW))
-OCR_FILTER_KEYWORDS = str(_settings.get("ocr_filter_keywords", OCR_FILTER_KEYWORDS))
-OCR_TABLE = bool(_settings.get("ocr_table", OCR_TABLE))
-OCR_PDF = bool(_settings.get("ocr_pdf", OCR_PDF))
-OCR_PIN = bool(_settings.get("ocr_pin", OCR_PIN))
+OCR_USE_CLS = _bool_or(_settings.get("ocr_use_cls"), OCR_USE_CLS)
+OCR_ENHANCE = _bool_or(_settings.get("ocr_enhance"), OCR_ENHANCE)
+OCR_MERGE_PARA = _bool_or(_settings.get("ocr_para"), OCR_MERGE_PARA)
+OCR_QR = _bool_or(_settings.get("ocr_qr"), OCR_QR)
+OCR_GPU = _bool_or(_settings.get("ocr_gpu"), OCR_GPU)
+OCR_FILTER_KW = _bool_or(_settings.get("ocr_filter_kw"), OCR_FILTER_KW)
+OCR_FILTER_KEYWORDS = _text_or(_settings.get("ocr_filter_keywords"), OCR_FILTER_KEYWORDS)
+OCR_TABLE = _bool_or(_settings.get("ocr_table"), OCR_TABLE)
+OCR_PDF = _bool_or(_settings.get("ocr_pdf"), OCR_PDF)
+OCR_PIN = _bool_or(_settings.get("ocr_pin"), OCR_PIN)
 
 # ---- PDF 识别 ----
 PDF_RENDER_SCALE = 2.0  # PDF 页面渲染倍率（1.0=72dpi，2.0≈144dpi，越高越清晰越慢）

@@ -18,6 +18,7 @@ class PdfWorker(QThread):
     progress = Signal(int, int)  # (当前页, 总页数)
     done = Signal(str)
     fail = Signal(str)
+    cancelled = Signal()  # 用户取消：界面据此关闭进度框
 
     def __init__(self, path: str, scale: float = 2.0) -> None:
         super().__init__()
@@ -46,6 +47,8 @@ class PdfWorker(QThread):
             multi = total > 1
             for i in range(total):
                 if self._cancelled:
+                    # 必须发信号：否则界面上的进度框没人关，下次识别还会叠加一个
+                    self.cancelled.emit()
                     return
                 self.progress.emit(i + 1, total)
                 size = doc.pagePointSize(i)

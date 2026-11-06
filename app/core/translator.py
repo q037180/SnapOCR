@@ -210,17 +210,23 @@ def translate_text(
     if not text:
         return ""
     if len(text) > _MAX_CHARS:
-        # 超长文本按段落粗略分段顺序翻译后拼接
+        # 超长文本分段：按行聚成不超过阈值的块，单行本身超长就循环硬切，
+        # 保证每一段都不超过接口上限（以前只切一次，剩余部分仍会超限被拒）
         parts: list[str] = []
         buf = ""
         for para in text.splitlines(keepends=True):
+            if len(para) > _MAX_CHARS:
+                if buf:
+                    parts.append(buf)
+                    buf = ""
+                parts.extend(
+                    para[i:i + _MAX_CHARS] for i in range(0, len(para), _MAX_CHARS)
+                )
+                continue
             if len(buf) + len(para) > _MAX_CHARS:
                 if buf:
                     parts.append(buf)
-                buf = para if len(para) <= _MAX_CHARS else ""
-                if not buf:
-                    parts.append(para[:_MAX_CHARS])
-                    parts.append(para[_MAX_CHARS:])
+                buf = para
             else:
                 buf += para
         if buf:

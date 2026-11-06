@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -115,23 +116,52 @@ class BgCentral(QWidget):
 class EnginePreloader(QThread):
     """后台预热 OCR 模型，让首次截图秒出结果。"""
 
+    fail = Signal(str)
+
     def run(self) -> None:
-        get_engine().warmup()
+        try:
+            get_engine().warmup()
+        except Exception as exc:  # noqa: BLE001
+            # 模型缺失/磁盘不可写/下载失败：不吞掉，交给主窗口提示
+            self.fail.emit(str(exc))
 
 
 class OcrWorker(QThread):
     done = Signal(str)
     fail = Signal(str)
+    progress = Signal(int, int, str)  # (已完成, 总数, 当前文件名)，仅批量识别用
 
-    def __init__(self, image=None, files: list[tuple[str, bytes]] | None = None) -> None:
+    def __init__(self, image=None, files: list[tuple[str, bytes]] | None = None,
+                 paths: list[str] | None = None) -> None:
         super().__init__()
         self._image = image
         self._files = files or []  # 拖拽的图片文件 [(文件名, 字节)]
+        self._paths = paths or []  # 批量识别：只传路径，由线程逐张读取
 
     def run(self) -> None:
         try:
-            if self._files:
+            if self._paths:
+                # 逐张读盘：内存峰值从「全部图片之和」降到「单张 + 结果文本」
                 parts: list[str] = []
+                total = len(self._paths)
+                multi = total > 1
+                for i, path in enumerate(self._paths):
+                    name = os.path.basename(path)
+                    self.progress.emit(i + 1, total, name)
+                    try:
+                        with open(path, "rb") as f:
+                            data = f.read()
+                    except OSError as exc:
+                        parts.append(
+                            f"== {name} ==\n[读取失败] {exc}" if multi
+                            else f"[读取失败] {name}：{exc}"
+                        )
+                        continue
+                    text = get_engine().recognize_bytes(data)
+                    parts.append(f"== {name} ==\n{text}" if multi else text)
+                self.done.emit("\n\n".join(parts))
+            elif self._files:
+                parts = []
                 multi = len(self._files) > 1
                 for name, data in self._files:
                     text = get_engine().recognize_bytes(data)
@@ -141,6 +171,26 @@ class OcrWorker(QThread):
                 self.done.emit(get_engine().recognize_image(self._image))
         except Exception as exc:  # noqa: BLE001
             self.fail.emit(str(exc))
+
+
+class ExportWorker(QThread):
+    """后台导出：大批量 PDF/docx 在主线程同步渲染会把界面冻住。"""
+
+    done = Signal(str)  # 输出路径
+    fail = Signal(str)
+
+    def __init__(self, path: str, text: str) -> None:
+        super().__init__()
+        self._path = path
+        self._text = text
+
+    def run(self) -> None:
+        try:
+            export_text(self._path, self._text)
+        except Exception as exc:  # noqa: BLE001
+            self.fail.emit(str(exc))
+        else:
+            self.done.emit(self._path)
 
 
 class TableWorker(QThread):
@@ -199,9 +249,18 @@ class MainWindow(QMainWindow):
         self._longshot_bar: LongShotBar | None = None
         self._longshot_dlg: LongShotDialog | None = None
         self._preview: PreviewPopup | None = None
+        self._history_bad = 0  # 读取时跳过的损坏记录数；-1 表示整个文件无法解析
         self._history: list[dict] = self._load_history()
+        self._history_sig = self._history_signature()
+        # 最后一次「注册成功」的热键组合：重注册失败时回滚到它，而不是回滚到刚改坏的值
+        self._active_hotkeys: tuple[str, str, str] = (
+            config.HOTKEY, config.TRANSLATE_HOTKEY, config.HOTKEY_LONG
+        )
         self._batch_files: list[str] = []  # 批量识别待处理队列
         self._batch_worker: OcrWorker | None = None
+        self._export_worker: ExportWorker | None = None
+        self._export_dlg: QProgressDialog | None = None
+        self._export_cancelled = False
 
         self._build_ui()
         self._build_tray()
@@ -220,11 +279,16 @@ class MainWindow(QMainWindow):
 
     def _deferred_start(self) -> None:
         self._register_hotkey()
-        if getattr(self, "_hotkey_error", ""):
+        if self._hotkey_error:
             self.statusBar().showMessage(self._hotkey_error, 15000)
         if self._preload_wanted and self._preload is None:
             self._preload = EnginePreloader()
+            self._preload.fail.connect(self._on_preload_fail)
             self._preload.start()
+
+    def _on_preload_fail(self, msg: str) -> None:
+        """预热失败要让人知道：否则首次识别才发现模型加载不了。"""
+        self.statusBar().showMessage(f"识别模型预热失败：{msg}（首次识别会重新尝试）", 15000)
 
     # ---- UI ----
     # Umi-OCR 风格：扁平卡片 + 圆角 + 蓝色主色调，标签页组织功能
@@ -290,6 +354,12 @@ class MainWindow(QMainWindow):
         self.btn_batch_clear.clicked.connect(self._on_batch_clear)
         self.btn_batch_start.clicked.connect(self._on_batch_start)
         self._refresh_list()
+        if self._history_bad:
+            if self._history_bad > 0:
+                msg = f"历史记录有 {self._history_bad} 条内容损坏，已跳过（原文件保留）"
+            else:
+                msg = "历史记录文件无法解析，已从空历史启动（原文件未改动）"
+            self.statusBar().showMessage(msg, 12000)
 
     def _build_capture_page(self) -> QWidget:
         """标签页 1：截图识别（提示 + 功能按钮 + 历史记录）。"""
@@ -440,19 +510,14 @@ class MainWindow(QMainWindow):
         self.tray.activated.connect(self._on_tray_activated)
         self.tray.show()
 
-    def _register_hotkey(self) -> None:
-        """注册全局热键。
-
-        keyboard 库在 Linux 需要 root 权限、macOS 需要「辅助功能」权限，
-        注册失败时安静降级：GUI 仍可用（按钮/托盘都能触发），只给出提示。
-        """
+    def _register_hotkey(self) -> bool:
+        """注册全局热键，返回是否全部成功；失败原因写入 self._hotkey_error。"""
+        self._hotkey_error = ""
         try:
             import keyboard
         except Exception as exc:  # noqa: BLE001
             self._hotkey_error = f"全局热键不可用（{exc}），请用按钮/托盘菜单触发"
-            return
-
-        self._hotkey_error = ""
+            return False
 
         def _bind(hotkey: str, bridge: "HotkeyBridge") -> bool:
             try:
@@ -480,10 +545,24 @@ class MainWindow(QMainWindow):
         ok3 = _bind(config.HOTKEY_LONG, self._hotkey_long_bridge)
 
         if not (ok1 and ok2 and ok3):
-            self._hotkey_error = (
-                "全局热键注册失败（Linux 需 root，macOS 需授予辅助功能权限），"
-                "请用按钮/托盘菜单触发"
+            self._hotkey_error = self._hotkey_fail_text()
+            return False
+        self._active_hotkeys = (
+            config.HOTKEY, config.TRANSLATE_HOTKEY, config.HOTKEY_LONG
+        )
+        return True
+
+    @staticmethod
+    def _hotkey_fail_text() -> str:
+        """按平台给排查方向：Windows 用户看到「Linux 需 root」只会更困惑。"""
+        if sys.platform == "win32":
+            return "全局热键注册失败：可能与其他程序冲突，请在设置里换一个组合"
+        if sys.platform == "darwin":
+            return (
+                "全局热键注册失败：请在「系统设置 → 隐私与安全性 → 辅助功能」"
+                "中允许本程序，或换一个组合"
             )
+        return "全局热键注册失败：Linux 需要 root 权限，或该组合已被其他程序占用"
 
     # ---- 截图流程 ----
     def start_capture(self, translate: bool = False, long: bool = False,
@@ -626,6 +705,15 @@ class MainWindow(QMainWindow):
         self.statusBar().clearMessage()
         QMessageBox.warning(self, config.APP_NAME, f"PDF 识别失败：{msg}")
 
+    def _on_pdf_cancelled(self) -> None:
+        self._close_pdf_dlg()
+        self.statusBar().showMessage("PDF 识别已取消", 4000)
+
+    def _on_pdf_cancel_clicked(self) -> None:
+        if self._pdf_worker is not None:
+            self._pdf_worker.cancel()
+        self.statusBar().showMessage("正在取消 PDF 识别...", 3000)
+
     def _close_pdf_dlg(self) -> None:
         if self._pdf_dlg is not None:
             self._pdf_dlg.reset()
@@ -662,13 +750,18 @@ class MainWindow(QMainWindow):
     # ---- 表格识别 ----
     def _on_table_done(self, rows: list) -> None:
         self.statusBar().clearMessage()
-        rows = [r for r in rows if any(str(c).strip() for c in r)]
+        rows = [
+            ["" if c is None else str(c) for c in r]
+            for r in rows
+            if isinstance(r, (list, tuple))
+            and any(c is not None and str(c).strip() for c in r)
+        ]
         if not rows:
             self.tray.showMessage(
                 config.APP_NAME, "未识别到表格内容", QSystemTrayIcon.Information, 2000
             )
             return
-        tsv = "\n".join("\t".join(str(c) for c in row) for row in rows)
+        tsv = "\n".join("\t".join(row) for row in rows)
         self._add_history(tsv)
         QApplication.clipboard().setText(tsv)
         default = os.path.join(
@@ -745,18 +838,30 @@ class MainWindow(QMainWindow):
     def _on_longshot_cancel(self) -> None:
         w = self._longshot_worker
         self._close_longshot_bar()
+        if w is None:
+            return
+        # 断开信号：取消后线程剩余结果不再弹窗
+        try:
+            w.progress.disconnect()
+            w.done.disconnect()
+            w.fail.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        if w.isRunning():
+            w.stop()
+            if not w.wait(5000):
+                # 还卡在 mss 抓屏里：不能丢引用，否则 QThread 运行中被销毁会崩进程。
+                # 保留引用，等它自己结束后再回收。
+                self._longshot_worker = w
+                w.finished.connect(lambda: self._on_longshot_worker_finished(w))
+                w.finished.connect(w.deleteLater)
+                self.statusBar().showMessage("长截图正在退出采集，请稍候", 5000)
+                return
         self._longshot_worker = None
-        if w is not None:
-            # 断开信号：取消后线程剩余结果不再弹窗
-            try:
-                w.progress.disconnect()
-                w.done.disconnect()
-                w.fail.disconnect()
-            except (RuntimeError, TypeError):
-                pass
-            if w.isRunning():
-                w.stop()
-                w.wait(3000)
+
+    def _on_longshot_worker_finished(self, w) -> None:
+        if self._longshot_worker is w:
+            self._longshot_worker = None
 
     def _close_longshot_bar(self) -> None:
         if self._longshot_bar is not None:
@@ -840,6 +945,21 @@ class MainWindow(QMainWindow):
         if len({hk, htr, hlong}) != 3:
             QMessageBox.warning(self, config.APP_NAME, "三个快捷键不能相同")
             return
+        illegal = [
+            name
+            for name, value in (
+                ("截图识别", hk), ("截屏翻译", htr), ("长截图", hlong)
+            )
+            if not config.is_valid_hotkey(value)
+        ]
+        if illegal:
+            QMessageBox.warning(
+                self, config.APP_NAME,
+                "以下快捷键不合法：" + "、".join(illegal)
+                + "\n\n请使用「Ctrl / Alt / Shift 等修饰键 + 一个普通键」的组合，"
+                  "例如 Ctrl+Alt+Q。\n单键（如 A）会劫持全系统按键，因此不允许。",
+            )
+            return
         opts = dlg.ocr_options()
         engine_changed = (
             opts["lang"] != config.OCR_LANG
@@ -858,66 +978,183 @@ class MainWindow(QMainWindow):
         config.OCR_FILTER_KEYWORDS = opts["filter_keywords"]
         config.OCR_PDF = opts["pdf"]
         config.OCR_PIN = opts["pin"]
-        config.save_settings(
-            {
-                "hotkey_capture": hk,
-                "hotkey_translate": htr,
-                "hotkey_long": hlong,
-                "ocr_lang": opts["lang"],
-                "ocr_use_cls": opts["use_cls"],
-                "ocr_enhance": opts["enhance"],
-                "ocr_para": opts["para"],
-                "ocr_qr": opts["qr"],
-                "ocr_table": opts["table"],
-                "ocr_gpu": opts["gpu"],
-                "ocr_filter_kw": opts["filter_kw"],
-                "ocr_filter_keywords": opts["filter_keywords"],
-                "ocr_pdf": opts["pdf"],
-                "ocr_pin": opts["pin"],
-            }
-        )
-        self._reregister_hotkeys_safely()
+        # 先试注册：注册失败会自动回滚 config 里的热键，避免把不可用的组合写进磁盘
+        hotkeys_ok = self._reregister_hotkeys_safely()
+        saved_ok = True
+        try:
+            config.save_settings(
+                {
+                    "hotkey_capture": config.HOTKEY,
+                    "hotkey_translate": config.TRANSLATE_HOTKEY,
+                    "hotkey_long": config.HOTKEY_LONG,
+                    "ocr_lang": opts["lang"],
+                    "ocr_use_cls": opts["use_cls"],
+                    "ocr_enhance": opts["enhance"],
+                    "ocr_para": opts["para"],
+                    "ocr_qr": opts["qr"],
+                    "ocr_table": opts["table"],
+                    "ocr_gpu": opts["gpu"],
+                    "ocr_filter_kw": opts["filter_kw"],
+                    "ocr_filter_keywords": opts["filter_keywords"],
+                    "ocr_pdf": opts["pdf"],
+                    "ocr_pin": opts["pin"],
+                }
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            saved_ok = False
+            QMessageBox.warning(
+                self, config.APP_NAME,
+                f"设置保存失败（本次修改仍然生效，但重启后会丢失）：{exc}",
+            )
         self.tip.setText(self._tip_html())
         if engine_changed:
             get_engine().reload()
+        if not hotkeys_ok:
+            self.statusBar().showMessage("设置已保存，但快捷键未生效（已恢复原设置）", 6000)
+        elif not saved_ok:
+            self.statusBar().showMessage("设置已生效，但未能写入磁盘（重启后会恢复原设置）", 6000)
+        elif engine_changed:
             self.statusBar().showMessage("识别设置已更新，引擎已重载", 3000)
         else:
             self.statusBar().showMessage("设置已保存", 3000)
 
-    def _reregister_hotkeys_safely(self) -> None:
-        """重新注册全局热键；失败自动恢复原设置。"""
-        import keyboard
+    def _reregister_hotkeys_safely(self) -> bool:
+        """重新注册全局热键；失败自动恢复上一次成功的组合并提示，返回是否成功。"""
+        old = self._active_hotkeys
 
-        old = (config.HOTKEY, config.TRANSLATE_HOTKEY, config.HOTKEY_LONG)
-        keyboard.unhook_all()
-        try:
-            self._register_hotkey()
-        except Exception as exc:  # noqa: BLE001
-            keyboard.unhook_all()
-            config.HOTKEY, config.TRANSLATE_HOTKEY, config.HOTKEY_LONG = old
-            self._register_hotkey()
-            QMessageBox.warning(
-                self, config.APP_NAME, f"快捷键注册失败（已恢复原设置）：{exc}"
-            )
+        def _unhook() -> None:
+            try:
+                import keyboard
+
+                keyboard.unhook_all()
+            except Exception:  # noqa: BLE001
+                pass
+
+        _unhook()
+        if self._register_hotkey():
+            return True
+        err = self._hotkey_error
+        _unhook()
+        config.HOTKEY, config.TRANSLATE_HOTKEY, config.HOTKEY_LONG = old
+        self._register_hotkey()  # 把原来的组合重新挂上
+        QMessageBox.warning(
+            self, config.APP_NAME,
+            f"{err or '快捷键注册失败'}\n已自动恢复为原来的快捷键。",
+        )
+        return False
 
     # ---- 历史记录 ----
     def _load_history(self) -> list[dict]:
+        """读取历史；跳过结构不合法的记录。
+
+        只有「合法 JSON 但元素结构不对」时最危险：以前会让窗口构造抛异常，
+        表现为双击程序没有任何窗口。这里逐条校验，坏记录直接跳过并计数。
+        """
+        self._history_bad = 0
         try:
             with open(config.HISTORY_FILE, encoding="utf-8") as f:
                 data = json.load(f)
-            return data if isinstance(data, list) else []
-        except Exception:  # noqa: BLE001
+        except FileNotFoundError:
             return []
+        except Exception:  # noqa: BLE001  文件被截断/编码损坏
+            self._history_bad = -1
+            return []
+        if not isinstance(data, list):
+            self._history_bad = -1
+            return []
+        clean: list[dict] = []
+        for it in data:
+            if not isinstance(it, dict):
+                self._history_bad += 1
+                continue
+            text = it.get("text")
+            if not isinstance(text, str) or not text.strip():
+                self._history_bad += 1
+                continue
+            ts = it.get("time")
+            clean.append({
+                "time": ts if isinstance(ts, str) and ts else "未知时间",
+                "text": text,
+            })
+        return clean
 
-    def _save_history(self) -> None:
-        os.makedirs(config.DATA_DIR, exist_ok=True)
-        with open(config.HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(self._history, f, ensure_ascii=False, indent=1)
+    @staticmethod
+    def _history_signature():
+        """磁盘历史文件的 (mtime, size)，用于判断「有没有被别的进程改过」。"""
+        try:
+            st = os.stat(config.HISTORY_FILE)
+            return (st.st_mtime_ns, st.st_size)
+        except OSError:
+            return None
+
+    def _save_history(self) -> bool:
+        """原子写入历史，失败时提示而不是抛进 Qt 槽里静默消失。"""
+        tmp = config.HISTORY_FILE + ".tmp"
+        try:
+            os.makedirs(config.DATA_DIR, exist_ok=True)
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(self._history, f, ensure_ascii=False, indent=1)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, config.HISTORY_FILE)  # 同分区原子替换，写入中断不会留半截文件
+            self._history_sig = self._history_signature()
+            return True
+        except (OSError, TypeError, ValueError) as exc:
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except OSError:
+                pass
+            self.statusBar().showMessage(f"历史保存失败：{exc}", 8000)
+            return False
+
+    @staticmethod
+    def _history_key(item: dict) -> tuple[str, str]:
+        return (str(item.get("time", "")), str(item.get("text", "")))
+
+    def _merge_disk_history(self) -> None:
+        """与磁盘现有记录合并（按「时间 + 文本」去重）。
+
+        `_add_history` 是「内存全量重写」模型：万一真的跑了两个进程，
+        后写的一方会把先写的记录抹掉。单实例锁是第一道防线，这里是第二道。
+        """
+        try:
+            with open(config.HISTORY_FILE, encoding="utf-8") as f:
+                disk = json.load(f)
+        except Exception:  # noqa: BLE001
+            return
+        if not isinstance(disk, list):
+            return
+        known = {self._history_key(it) for it in self._history}
+        extra: list[dict] = []
+        for it in disk:
+            if not isinstance(it, dict):
+                continue
+            text = it.get("text")
+            if not isinstance(text, str) or not text.strip():
+                continue
+            ts = it.get("time")
+            entry = {"time": ts if isinstance(ts, str) and ts else "未知时间", "text": text}
+            key = self._history_key(entry)
+            if key not in known:
+                known.add(key)
+                extra.append(entry)
+        if extra:
+            self._history = sorted(
+                self._history + extra, key=lambda it: it["time"], reverse=True
+            )
 
     def _add_history(self, text: str) -> None:
+        text = (text or "").strip()
+        if not text:
+            return
         self._history.insert(
             0, {"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "text": text}
         )
+        if self._history_signature() != self._history_sig:
+            # 磁盘被别人改过（例如真的多开了）才需要读回来合并；
+            # 常规路径不读盘，避免大历史每次都多一次全量 JSON 解析
+            self._merge_disk_history()
         del self._history[config.HISTORY_LIMIT:]
         self._save_history()
         self._refresh_list()
@@ -927,12 +1164,19 @@ class MainWindow(QMainWindow):
         self.list.setUpdatesEnabled(False)
         self.list.clear()
         for i, item in enumerate(self._history):
-            if kw and kw not in item["text"].lower():
+            # 第二道兜底：即使内存里混进了坏记录也不能让刷新抛异常
+            text = item.get("text") if isinstance(item, dict) else None
+            if not isinstance(text, str):
                 continue
-            preview = item["text"].replace("\n", " ⏎ ")
+            if kw and kw not in text.lower():
+                continue
+            ts = item.get("time")
+            if not isinstance(ts, str) or not ts:
+                ts = "未知时间"
+            preview = text.replace("\n", " ⏎ ")
             if len(preview) > 80:
                 preview = preview[:80] + "…"
-            it = QListWidgetItem(f"{item['time']}    {preview}")
+            it = QListWidgetItem(f"{ts}    {preview}")
             it.setData(Qt.UserRole, i)
             self.list.addItem(it)
         self.list.setUpdatesEnabled(True)
@@ -965,12 +1209,16 @@ class MainWindow(QMainWindow):
         )
 
     def _export_selected(self) -> None:
-        """把选中的历史记录导出为 txt / docx / pdf。"""
+        """把选中的历史记录导出为 txt / docx / pdf / md（后台线程，界面不冻结）。"""
+        if self._export_worker is not None and self._export_worker.isRunning():
+            self.statusBar().showMessage("导出进行中，请稍候", 3000)
+            return
         rows = sorted({i.data(Qt.UserRole) for i in self.list.selectedIndexes()})
         if not rows:
             QMessageBox.information(self, config.APP_NAME, "请先在列表中选择要导出的记录")
             return
         texts = [self._history[i]["text"] for i in rows if 0 <= i < len(self._history)]
+        text = "\n".join(texts)
         default = os.path.join(os.path.expanduser("~"), "SnapOCR导出.txt")
         path, _ = QFileDialog.getSaveFileName(
             self, "导出所选记录", default,
@@ -979,15 +1227,66 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        try:
-            export_text(path, "\n".join(texts))
-        except Exception as exc:  # noqa: BLE001
-            QMessageBox.warning(self, config.APP_NAME, f"导出失败：{exc}")
+        if os.path.splitext(path)[1].lower() in (".pdf", ".docx") and len(text) > 200_000:
+            # 渲染是 CPU 密集的：先打招呼，用户可以选择换 txt 或耐心等
+            if QMessageBox.question(
+                self, config.APP_NAME,
+                f"导出内容约 {len(text) // 10000} 万字，生成该格式可能需要数十秒。\n"
+                "导出在后台进行，期间界面仍可操作（可点进度框取消）。\n\n是否继续？",
+            ) != QMessageBox.Yes:
+                return
+        self._export_cancelled = False
+        self._export_dlg = QProgressDialog("正在导出，请稍候...", "取消", 0, 0, self)
+        self._export_dlg.setWindowTitle("导出")
+        self._export_dlg.setWindowModality(Qt.WindowModal)
+        self._export_dlg.setMinimumDuration(400)  # 快速导出不闪一下框
+        self._export_dlg.setMinimumWidth(320)
+        self._export_dlg.canceled.connect(self._on_export_cancel)
+        self._export_worker = ExportWorker(path, text)
+        self._export_worker.done.connect(self._on_export_done)
+        self._export_worker.fail.connect(self._on_export_fail)
+        self._export_worker.start()
+
+    def _close_export_dlg(self) -> None:
+        if self._export_dlg is not None:
+            dlg = self._export_dlg
+            self._export_dlg = None
+            # 先断开 canceled：reset()/close() 在某些平台会触发 canceled，
+            # 那会把「导出成功」误判成「用户取消」从而删掉刚生成的文件
+            try:
+                dlg.canceled.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+            dlg.reset()
+            dlg.close()
+
+    def _on_export_cancel(self) -> None:
+        # 渲染无法中途打断：先标记，完成后把半成品文件删掉
+        self._export_cancelled = True
+        self.statusBar().showMessage("正在取消导出：结束后会删除未完成的文件", 5000)
+
+    def _on_export_done(self, path: str) -> None:
+        cancelled = self._export_cancelled
+        self._close_export_dlg()
+        if cancelled:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+            self.statusBar().showMessage("已取消导出", 4000)
             return
         self.tray.showMessage(
             config.APP_NAME, f"已导出 {os.path.basename(path)}",
             QSystemTrayIcon.Information, 2000,
         )
+
+    def _on_export_fail(self, msg: str) -> None:
+        cancelled = self._export_cancelled
+        self._close_export_dlg()
+        if cancelled:
+            self.statusBar().showMessage("已取消导出", 4000)
+            return
+        QMessageBox.warning(self, config.APP_NAME, f"导出失败：{msg}")
 
     def _delete_selected(self) -> None:
         rows = sorted(
@@ -1103,33 +1402,21 @@ class MainWindow(QMainWindow):
         if not self._batch_files:
             self.batch_status.setText("队列为空，先拖入图片或点「添加图片...」")
             return
-        if self._worker is not None and self._worker.isRunning() or (
-            self._batch_worker is not None and self._batch_worker.isRunning()
-        ):
-            self.statusBar().showMessage("识别进行中，请稍候", 3000)
+        if not self._check_ocr_busy():
             return
-        payload: list[tuple[str, bytes]] = []
-        failed: list[str] = []
-        for path in self._batch_files:
-            try:
-                with open(path, "rb") as f:
-                    payload.append((os.path.basename(path), f.read()))
-            except OSError as exc:
-                failed.append(path)
-                self.batch_status.setText(f"读取失败：{exc}")
-        if not payload:
-            return
-        self.batch_status.setText(f"批量识别中（{len(payload)} 张）...")
+        # 只把路径交给线程，由它逐张读盘：500 张 1080p 以前会在 GUI 线程
+        # 一次性读掉 600MB 并卡住 1 秒，现在内存峰值只有「单张 + 结果文本」
+        paths = list(self._batch_files)
+        self.batch_status.setText(f"批量识别中（{len(paths)} 张）...")
         self.btn_batch_start.setEnabled(False)
-        self._batch_worker = OcrWorker(files=payload)
+        self._batch_worker = OcrWorker(paths=paths)
+        self._batch_worker.progress.connect(self._on_batch_progress)
         self._batch_worker.done.connect(self._on_batch_done)
         self._batch_worker.fail.connect(self._on_batch_fail)
         self._batch_worker.start()
-        if failed:
-            self._batch_files = [
-                p for p in self._batch_files if p not in failed
-            ]
-            self._refresh_batch_list()
+
+    def _on_batch_progress(self, done: int, total: int, name: str) -> None:
+        self.batch_status.setText(f"批量识别中 {done}/{total}：{name}")
 
     def _on_batch_done(self, text: str) -> None:
         self.btn_batch_start.setEnabled(True)
@@ -1152,12 +1439,13 @@ class MainWindow(QMainWindow):
         self._pdf_dlg.setWindowTitle("PDF 识别")
         self._pdf_dlg.setMinimumDuration(0)
         self._pdf_dlg.setMinimumWidth(320)
-        self._pdf_dlg.canceled.connect(lambda: self._pdf_worker and self._pdf_worker.cancel())
+        self._pdf_dlg.canceled.connect(self._on_pdf_cancel_clicked)
         self._pdf_dlg.show()
         self._pdf_worker = PdfWorker(path, config.PDF_RENDER_SCALE)
         self._pdf_worker.progress.connect(self._on_pdf_progress)
         self._pdf_worker.done.connect(self._on_pdf_done)
         self._pdf_worker.fail.connect(self._on_pdf_fail)
+        self._pdf_worker.cancelled.connect(self._on_pdf_cancelled)
         self._pdf_worker.start()
 
     # ---- 窗口/托盘行为 ----
@@ -1169,6 +1457,18 @@ class MainWindow(QMainWindow):
         self.showNormal()
         self.raise_()
         self.activateWindow()
+
+    def show_from_second_instance(self) -> None:
+        """第二个进程启动时：把已存在的窗口带到前台，而不是开第二个实例。
+
+        存在多个窗口（贴图、翻译框）时只处理主窗口，不打断贴图。
+        """
+        self._show_window()
+        if self.isMinimized():
+            self.showNormal()
+        self.tray.showMessage(
+            config.APP_NAME, "已在运行，已为你切回窗口", QSystemTrayIcon.Information, 2000
+        )
 
     def closeEvent(self, event) -> None:  # noqa: N802
         if self.tray.isVisible():
@@ -1202,6 +1502,13 @@ class MainWindow(QMainWindow):
                 w.wait(10000)
         if self._preload is not None and self._preload.isRunning():
             self._preload.wait(10000)
+        if self._export_worker is not None and self._export_worker.isRunning():
+            # 导出线程里正在跑 Qt 打印：进程退出时销毁运行中的 QThread 会崩
+            self._export_worker.wait(5000)
+            if self._export_worker.isRunning():
+                self._export_worker.finished.connect(QApplication.quit)
+                self.statusBar().showMessage("导出尚未完成，结束后自动退出", 5000)
+                return
         if self._worker is not None and self._worker.isRunning():
             self._worker.wait(10000)
             if self._worker.isRunning():

@@ -50,10 +50,27 @@ def _upscale_small(arr):
 
     h, w = arr.shape[:2]
     min_side = min(h, w)
+    if min_side <= 0:  # 空图/零宽图：原样返回，交给上层判定
+        return arr
     if min_side >= 320:
         return arr
     scale = min(3.0, 320.0 / min_side)
     return cv2.resize(arr, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+
+
+def _normalize_bgr(arr):
+    """统一成 3 通道 BGR：公开入口可能收到灰度图/带 alpha 的图。"""
+    if arr is None or getattr(arr, "size", 0) == 0:
+        return arr
+    if arr.ndim == 2:
+        import cv2
+
+        return cv2.cvtColor(arr, cv2.COLOR_GRAY2BGR)
+    if arr.ndim == 3 and arr.shape[2] == 4:
+        import cv2
+
+        return cv2.cvtColor(arr, cv2.COLOR_BGRA2BGR)
+    return arr
 
 
 def _enhance(arr):
@@ -65,6 +82,8 @@ def _enhance(arr):
     import cv2
     import numpy as np
 
+    if arr is None or getattr(arr, "size", 0) == 0 or min(arr.shape[:2]) <= 0:
+        return arr
     gray = cv2.cvtColor(arr, cv2.COLOR_BGR2GRAY)
     out = arr
     if float(np.mean(gray)) < 100:  # 整体偏暗：深色主题/夜间模式截图
@@ -229,6 +248,9 @@ class OCREngine:
         return self.recognize_array(arr)
 
     def recognize_array(self, arr) -> str:
+        arr = _normalize_bgr(arr)
+        if arr is None or getattr(arr, "size", 0) == 0:
+            return ""  # 空图/读取失败：直接返回空结果，不进模型
         if config.OCR_ENHANCE:
             arr = _enhance(arr)
         arr = _upscale_small(arr)
@@ -246,6 +268,9 @@ class OCREngine:
         开启 return_word_box 拿到每个字的框，按行聚类、按列间隙切分，
         返回 list[list[str]]（可直接导出 Excel）。非表格区域也能给出近似网格。
         """
+        arr = _normalize_bgr(arr)
+        if arr is None or getattr(arr, "size", 0) == 0:
+            return []
         if config.OCR_ENHANCE:
             arr = _enhance(arr)
         arr = _upscale_small(arr)
@@ -293,17 +318,27 @@ def format_result(result, merge_para: bool = False) -> str:
             low = text.casefold()
             if any(kw in low for kw in keywords):
                 continue  # 水印/关键词过滤
-            items.append(_box_item(box, text))
+            item = _box_item(box, text)
+            if item is not None:
+                items.append(item)
     else:  # 旧版返回 [[box, text, score], ...]
         for row in result:
-            score = float(row[2]) if len(row) > 2 else 1.0
-            text = str(row[1])
+            # 兼容字段不全/类型异常的行，避免个别脏行让整次识别失败
+            if not isinstance(row, (list, tuple)) or len(row) < 2:
+                continue
+            try:
+                score = float(row[2]) if len(row) > 2 else 1.0
+            except (TypeError, ValueError):
+                score = 1.0
+            text = str(row[1] or "")
             if len(text.strip()) <= 1 and score < _NOISE_SCORE:
                 continue
             low = text.casefold()
             if any(kw in low for kw in keywords):
                 continue
-            items.append(_box_item(row[0], text))
+            item = _box_item(row[0], text)
+            if item is not None:
+                items.append(item)
     lines = _group_lines(items)
     if merge_para:
         return _merge_paragraphs(lines)
@@ -311,9 +346,21 @@ def format_result(result, merge_para: bool = False) -> str:
 
 
 def _box_item(box, text: str):
-    xs = [float(p[0]) for p in box]
-    ys = [float(p[1]) for p in box]
-    return (sum(ys) / 4.0, max(ys) - min(ys), min(xs), max(xs), text)
+    """(行中心 y, 行高, 左, 右, 文本)；框结构不可用时返回 None 由调用方跳过。
+
+    box 可能是 numpy 数组，不能写 `box or []`（数组真值判断会抛 ValueError）；
+    旧版/异常数据里也可能出现字符串、缺坐标等结构。
+    """
+    try:
+        pts = [] if box is None else list(box)
+        xs = [float(p[0]) for p in pts]
+        ys = [float(p[1]) for p in pts]
+    except (TypeError, ValueError, IndexError, KeyError):
+        return None
+    if not xs or not ys:
+        return None
+    n = float(len(ys)) or 1.0  # 不是 4 点多边形时按实际点数取中心
+    return (sum(ys) / n, max(ys) - min(ys), min(xs), max(xs), text)
 
 
 def _line_text(line) -> str:
@@ -411,12 +458,15 @@ def extract_table(result) -> list[list[str]]:
             if not w or not w[0] or w[2] is None:
                 continue
             box = w[2]
+            if len(box) == 0:  # 空框：跳过（min/max 会抛 ValueError）
+                continue
             xs = [float(p[0]) for p in box]
             ys = [float(p[1]) for p in box]
             text = str(w[0]).strip()
             if not text:
                 continue
-            words.append((min(xs), max(xs), sum(ys) / 4.0, max(ys) - min(ys), text))
+            n = float(len(ys)) or 1.0
+            words.append((min(xs), max(xs), sum(ys) / n, max(ys) - min(ys), text))
     if not words:
         return []
     return _grid_from_words(words)
