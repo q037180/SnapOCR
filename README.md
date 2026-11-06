@@ -34,7 +34,7 @@
 
 > 想一次看完 15 秒串联演示（截图识别 → 历史搜索 → 导出）：[hero-15s.gif](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/hero-15s.gif)
 >
-> <sub>演示图合计约 3 MB。若长时间空白不显示，是当前网络访问 GitHub 资源受限（不是图挂了），可直接在仓库 `assets/` 目录里查看同名文件。</sub>
+> <sub>演示图均为完整清晰度版本（合计约 6.9 MB）。若长时间空白不显示，是当前网络访问 GitHub 资源受限（不是图挂了），可直接在仓库 `assets/` 目录里查看同名文件。</sub>
 
 ---
 
