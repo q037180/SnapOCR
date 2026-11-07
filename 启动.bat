@@ -14,6 +14,10 @@ set "PYCHECK=%~dp0venv\Scripts\python.exe"
 set "PYRUN=%~dp0venv\Scripts\pythonw.exe"
 
 :CHECK
+rem Python 3.10+ is required: the code uses PEP 604 unions (X | None).
+rem Without this check a 3.8 interpreter installs deps fine then dies with SyntaxError.
+"%PYCHECK%" -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>nul
+if errorlevel 1 goto OLDPYTHON
 echo [SnapOCR] Checking dependencies...
 "%PYCHECK%" -c "import PySide6, rapidocr, cv2, numpy, mss, keyboard, docx, openpyxl" >nul 2>nul
 if errorlevel 1 (
@@ -29,6 +33,14 @@ exit /b 0
 echo [SnapOCR] Python not found.
 echo Please install Python 3.10+ from https://www.python.org/downloads/
 echo Then run: pip install -r requirements.txt
+pause
+exit /b 1
+
+:OLDPYTHON
+echo [SnapOCR] Python 3.10 or newer is required, but the interpreter found is older:
+"%PYCHECK%" -c "import sys,platform; print(platform.python_version())"
+echo Install Python 3.10+ from https://www.python.org/downloads/
+echo If a local venv exists, delete the venv folder and run this script again.
 pause
 exit /b 1
 
