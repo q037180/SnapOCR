@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="assets/icon.png" width="128" alt="SnapOCR"/>
+<img src="https://q037180.github.io/SnapOCR/assets/icon.png" width="128" alt="SnapOCR"/>
 
 ## SnapOCR 文字识别工具
 
@@ -18,7 +18,7 @@
 
 免费 · 开源（MIT）· 识别在本机完成，不上传任何截图
 
-![截图识别演示：按热键框选，松开即复制到剪贴板](assets/demo.gif)
+![截图识别演示：按热键框选，松开即复制到剪贴板](https://q037180.github.io/SnapOCR/assets/demo.gif)
 
 </div>
 
@@ -30,11 +30,11 @@
 2. **识别结果要回头找**：剪贴板只记得最后一次，SnapOCR 记得每一次。所有结果自动进历史，关键词即时过滤、悬停浮窗预览、双击再次复制，还能一键导出 txt / docx / pdf / md / xlsx。
 3. **一整页 / 一整批**：滚动长截图拼接、PDF 逐页识别、文件夹拖入批量队列，配合表格转 Excel 与截屏翻译，一次做完，不用在几个工具之间来回倒。
 
-![历史搜索演示：识别结果随时搜回来](assets/preview-hover.gif)
+![历史搜索演示：识别结果随时搜回来](https://q037180.github.io/SnapOCR/assets/preview-hover.gif)
 
-> 想一次看完 15 秒串联演示（截图识别 → 历史搜索 → 导出）：[hero-15s.gif](assets/hero-15s.gif)
+> 想一次看完 15 秒串联演示（截图识别 → 历史搜索 → 导出）：[hero-15s.gif](https://q037180.github.io/SnapOCR/assets/hero-15s.gif)
 >
-> <sub>演示图均为完整清晰度版本（合计约 6.9 MB）。若长时间空白不显示，是当前网络访问 GitHub 资源受限（不是图挂了），可直接在仓库 `assets/` 目录里查看同名文件。</sub>
+> <sub>演示图均为完整清晰度版本（合计约 6.9 MB），托管在项目落地页同域的图床上。若长时间空白不显示，可直接在仓库 `assets/` 目录查看同名文件，或打开 <a href="https://q037180.github.io/SnapOCR/">落地页</a>。</sub>
 
 ---
 
@@ -55,7 +55,7 @@
 * [项目结构](#项目结构)
 * [开发计划](#开发计划)
 
-![功能总览：PDF 识别 / 贴图 / 批量 / 导出](assets/demo-features.gif)
+![功能总览：PDF 识别 / 贴图 / 批量 / 导出](https://q037180.github.io/SnapOCR/assets/demo-features.gif)
 
 ---
 
@@ -69,13 +69,13 @@
 - **二维码**：框选区域没有文字时自动兜底解码二维码
 - **智能排版**：按行还原排版，多栏文本不乱序
 
-![截图识别演示](assets/demo.gif)
+![截图识别演示](https://q037180.github.io/SnapOCR/assets/demo.gif)
 
 ## 批量识别
 
 把图片或整个文件夹拖进主窗口，自动加入批量队列（递归收集、去重、上限 500 张），点「开始识别」逐张处理，结果按文件名分组进入历史记录，之后可以按关键词搜回来。
 
-![批量识别演示](assets/demo-batch.gif)
+![批量识别演示](https://q037180.github.io/SnapOCR/assets/demo-batch.gif)
 
 ## PDF 整档识别
 
@@ -85,19 +85,19 @@
 
 框选表格区域 → 自动识别为行列矩阵 → 预览可编辑 → 一键保存 Excel（xlsx）。
 
-![表格识别演示](assets/demo-table.gif)
+![表格识别演示](https://q037180.github.io/SnapOCR/assets/demo-table.gif)
 
 ## 截图贴图
 
 框选后图片钉在桌面置顶显示，可同时钉多张：拖动移动、滚轮缩放、`Ctrl+滚轮` 调透明度、双击或右键关闭。
 
-![截图贴图演示](assets/demo-pin.gif)
+![截图贴图演示](https://q037180.github.io/SnapOCR/assets/demo-pin.gif)
 
 ## 截屏翻译
 
 热键 `Ctrl+Alt+T` 框选英文段落 → 识别 → 自动弹出翻译窗口得到中文译文。原文可编辑后重译，支持简繁中文、英、日、韩、法、德、西、俄、越、泰 11 种语言互译（必应翻译为主，MyMemory 兜底，免费无需 API Key）。
 
-![截屏翻译演示](assets/preview-translate.gif)
+![截屏翻译演示](https://q037180.github.io/SnapOCR/assets/preview-translate.gif)
 
 ## 长截图
 
@@ -112,7 +112,7 @@
 - 大批量导出在后台线程进行，界面不冻结；内容超过 20 万字会先提示预计耗时，导出中可取消
 - 历史写入采用「临时文件 + 原子替换」：断电或磁盘写满不会把已有记录截断成半个文件
 
-![历史预览演示](assets/preview-hover.gif)
+![历史预览演示](https://q037180.github.io/SnapOCR/assets/preview-hover.gif)
 
 ## 全局设置
 
@@ -294,9 +294,9 @@ Built-in OCR (Windows Snipping Tool, PowerToys Text Extractor, macOS Live Text) 
 - Export: `.txt` / `.docx` / `.pdf` / `.md` / `.xlsx`
 - Performance reference: ~7–10 s for a full 1080p screen on CPU (depends on CPU and text density); small regions are near-instant
 
-![Capture demo](assets/demo.gif)
+![Capture demo](https://q037180.github.io/SnapOCR/assets/demo.gif)
 
-![Searchable history](assets/preview-hover.gif)
+![Searchable history](https://q037180.github.io/SnapOCR/assets/preview-hover.gif)
 
 ### Install (Windows 10/11 x64)
 

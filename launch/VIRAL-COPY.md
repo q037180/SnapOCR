@@ -69,7 +69,7 @@
 2. 灰度标准差 **< 45**（浅灰字、水印字、低对比 UI）→ 对 LAB 的 L 通道再跑一次 CLAHE；
 3. 小选区放大 **2–3 倍** 再送进模型。
 
-![深色截图预处理前后的真实像素对比](https://raw.githubusercontent.com/q037180/SnapOCR/main/assets/compare-dark-ui.png)
+![深色截图预处理前后的真实像素对比](https://q037180.github.io/SnapOCR/assets/compare-dark-ui.png)
 
 右图是代码里 `_enhance()` 对左图跑出来的真实像素，不是画的示意图。我故意没放「识别结果对比」——挑一张对自己有利的截图当准确率证据没什么意思，欢迎拿自己的深色截图实测。
 
@@ -83,7 +83,7 @@
 
 改动小到不值一提，但用过之后回不去。
 
-![15 秒串联演示：框选识别 → 历史搜索 → 定格](https://raw.githubusercontent.com/q037180/SnapOCR/main/assets/hero-15s.gif)
+![15 秒串联演示：框选识别 → 历史搜索 → 定格](https://q037180.github.io/SnapOCR/assets/hero-15s.gif)
 
 ## 哦对，我把它做成了一个工具
 

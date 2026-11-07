@@ -9,9 +9,9 @@
 
 | 项 | 文件 | 作用 |
 | --- | --- | --- |
-| README 13 张图改仓库内相对路径 | `README.md` | 不再依赖 `v1.0.0` 这个旧 tag；`raw.githubusercontent.com` 实测 0.35 s 可达，`release-assets` 带 SAS 签名参数在转存场景必挂 |
+| README 13 张图改走 Pages 图床 | `README.md`、`docs/assets/` | 四通道各采样 4 次：相对路径 **0/4**、`raw.githubusercontent.com` 绝对 **0/4**、原 `release-assets` 4/4 但带 SAS 签名参数转存必挂、**Pages 4/4 且 0.6 s**。统一改用 Pages，不依赖旧 tag、不依赖 SAS 签名 |
 | 首屏下载双链接 + SHA-256 | `README.md` 安装段、顶部导航 | 官方直链实测 `000`（代理对该域名 502），镜像放在首屏而不是折叠的「下载很慢」说明里 |
-| 推广稿配图改 raw 绝对链接 + 本地图包清单 | `READY-TO-POST.md` §1、`VIRAL-COPY.md` §6 | 解决掘金外链图「转存失败」把提示文本写进正文 |
+| 推广稿配图改 Pages 图床 + 本地图包清单 | `READY-TO-POST.md` §1、`VIRAL-COPY.md` §6 | 解决掘金外链图「转存失败」把提示文本写进正文；外链用干净的 Pages URL |
 | Social Preview 1280×640 | `assets/social-preview.png`、`tools/make_social_preview.py` | 分享卡片从灰色默认图换成真实产品图；脚本可复现 |
 | GitHub Pages 落地页 | `docs/index.html`、`docs/.nojekyll`、`docs/assets/`（1.7 MB） | 中英元数据 + JSON-LD + 双下载链接 + FAQ，可被搜索引擎收录；不依赖任何外部 CDN |
 | winget 四件套 | `launch/winget/manifests/q/q037180/SnapOCR/1.0.3/` | `winget install q037180.SnapOCR`；用 exe，因为 winget 不支持 7z |
@@ -23,7 +23,8 @@
 
 - GitHub 仓库 `description` 改为中英双语（中文搜索词进了仓库元数据）
 - `topics` 补到 20 个
-- GitHub Pages 从 `main / docs` 发布
+- GitHub Pages 从 `main / docs` 发布，**已构建成功**：https://q037180.github.io/SnapOCR/ （`status: built`，首页与图片实测 206 / 0.6 s）
+- 因此 `docs/assets/` 同时兼任 README 与推广稿的图床，共 11 张、7.3 MB
 
 > `description` 原值（需要回退时用）：
 > `Offline screenshot OCR for dark IDEs and dark-mode pages — auto-inverts dark captures and keeps every result in a searchable history. Windows, MIT.`
@@ -46,12 +47,11 @@ https://github.com/q037180/SnapOCR/settings → 「Social preview」→ **Upload
 
 `launch/` 里的稿子已经够了，**不要再加新平台，先发这一帖**。两周后仍不达标，按 `LAUNCH-PLAN.md` §3 的判断：问题在楔子场景（深色截图是不是真痛点），换钩子重发一轮，别急着加功能。
 
-### 3. 核对 Pages 是否上线
+### 3. 可选：让搜索引擎收录落地页
 
-推送后 1–2 分钟访问 https://q037180.github.io/SnapOCR/ 。若 404，到
-https://github.com/q037180/SnapOCR/settings/pages 确认 Source 是 **Deploy from a branch → main / docs**。
-
-想让百度收录，再到百度搜索资源平台提交这个 URL（需要站长验证，属于可选项）。
+Pages 已上线并通过验证。想拿长尾搜索流量，到 Google Search Console / 百度搜索资源平台提交
+https://q037180.github.io/SnapOCR/ （百度需要站长验证，属于可选项）。
+页面已带中文 title/description、canonical 与 JSON-LD `SoftwareApplication`，不需要再改 HTML。
 
 ### 4. 提交被动分发渠道（一次投入、长期有量，穿插在发帖之后做）
 
