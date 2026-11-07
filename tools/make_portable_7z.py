@@ -6,11 +6,11 @@
 
 同时产出一份内容相同的 zip，用于 winget 分发：winget 的 InstallerType
 不支持 7z，但支持 zip + NestedInstallerType: portable。之所以不用单文件
-exe 交给 winget，是因为 PyInstaller onefile 每次启动都要解压 155 MB 到临时
-目录，实测 52 次启动有 7 次以 127（ERROR_PROC_NOT_FOUND）失败。
+exe 交给 winget，是因为 PyInstaller onefile 每次启动都要把 378 MB / 313 个文件
+解压到临时目录，实测 52 次启动有 7 次以 127（ERROR_PROC_NOT_FOUND）失败。
 
 运行：venv/Scripts/python.exe tools/make_portable_7z.py
-输出（版本号取自环境变量 SNAP_OCR_VERSION，默认 v1.0.0）：
+输出（版本号依次取：环境变量 SNAP_OCR_VERSION → app/config.py 的 APP_VERSION）：
   dist/SnapOCR-<version>-win64.7z
   dist/SnapOCR-<version>-win64.7z.sha256
   dist/SnapOCR-<version>-win64.zip
@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import sys
 import zipfile
 
 import py7zr
@@ -31,7 +32,23 @@ DIST = os.environ.get("SNAP_OCR_DIST") or os.path.join(ROOT, "dist")
 EXE = os.path.join(DIST, "SnapOCR.exe")  # 单文件版，仅用于附带生成校验值
 PORTABLE_DIR = os.path.join(DIST, "SnapOCR")  # PyInstaller onedir 产物
 PORTABLE_EXE = os.path.join(PORTABLE_DIR, "SnapOCR.exe")
-VERSION = os.environ.get("SNAP_OCR_VERSION", "v1.0.0").strip() or "v1.0.0"
+def _default_version() -> str:
+    """没给 SNAP_OCR_VERSION 时读 app/config.py，避免打出来的包名与代码版本不一致。"""
+    if ROOT not in sys.path:
+        sys.path.insert(0, ROOT)
+    try:
+        from app.config import APP_VERSION
+    except Exception:
+        return ""
+    return f"v{str(APP_VERSION).strip()}"
+
+
+VERSION = (os.environ.get("SNAP_OCR_VERSION") or "").strip() or _default_version()
+if not VERSION:
+    raise SystemExit(
+        "无法确定版本号：请设置环境变量 SNAP_OCR_VERSION，"
+        "或在 app/config.py 中定义 APP_VERSION。"
+    )
 ARCHIVE = os.path.join(DIST, f"SnapOCR-{VERSION}-win64.7z")
 ZIP = os.path.join(DIST, f"SnapOCR-{VERSION}-win64.zip")
 NOTE = os.path.join(DIST, "使用说明.txt")

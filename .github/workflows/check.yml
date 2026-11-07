@@ -1,0 +1,38 @@
+name: Check
+
+# 轻量静态检查 + 一致性测试，不构建、不装运行依赖（测试只 import app/config.py）。
+# 目的是拦住「代码改了文档没改」这类漂移，历史上已经踩过三次。
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install lint tool
+        run: pip install pyflakes
+
+      - name: Byte-compile
+        run: python -m compileall -q app tools tests entry.py
+
+      - name: Pyflakes
+        run: python -m pyflakes app tools tests entry.py
+
+      - name: Assets mirror in sync
+        run: python tools/sync_assets.py --check
+
+      - name: Consistency tests
+        run: python -m unittest discover -s tests -v

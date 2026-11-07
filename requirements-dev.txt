@@ -1,0 +1,11 @@
+# 开发 / 打包用依赖。运行程序和 README 里的「源码运行」不需要这些。
+#
+#   pip install -r requirements-dev.txt
+#
+# pyinstaller —— 生成 exe / onedir（SnapOCR.spec、SnapOCR-portable.spec 需要）
+# py7zr       —— tools/make_portable_7z.py 生成 7z 绿色包
+# Pillow      —— tools/make_*.py 生成演示 GIF、对比图、社交预览图
+-r requirements.txt
+pyinstaller>=6.0
+py7zr>=0.20
+Pillow>=10.0

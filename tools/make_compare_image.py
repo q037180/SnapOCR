@@ -50,7 +50,6 @@ def make_dark_ide(w=600, h=368):
 
     K = "#c586c0"   # keyword
     F = "#dcdcaa"   # function
-    S = "#ce9178"   # string
     C = "#6a9955"   # comment
     N = "#b5cea8"   # number
     T = "#d4d4d4"   # plain

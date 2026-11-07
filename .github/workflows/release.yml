@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag used in archive names (e.g. v1.0.1)'
+        description: 'Version tag used in archive names (e.g. v1.0.3). 留空则取 app/config.py 的 APP_VERSION'
         required: false
-        default: 'v1.0.0'
+        default: ''
 
 permissions:
   contents: write
@@ -31,13 +31,31 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt pyinstaller py7zr
 
+      # 版本号的单一来源是 app/config.py 的 APP_VERSION；tag / 手填值
+      # 必须与它一致，否则下面直接失败，避免打出「文件名 1.0.4、代码 1.0.3」的包。
+      - name: Read APP_VERSION
+        id: appver
+        shell: pwsh
+        run: |
+          $appv = (python -c "from app.config import APP_VERSION; print(APP_VERSION)").Trim()
+          if (-not $appv) { throw "无法从 app/config.py 读到 APP_VERSION" }
+          "appv=$appv" >> $env:GITHUB_OUTPUT
+          echo "app/config.py APP_VERSION = $appv"
+
       - name: Resolve version
         id: ver
         shell: pwsh
         run: |
           $v = "${{ github.event.inputs.version }}"
           if ("${{ github.ref_type }}" -eq "tag") { $v = "${{ github.ref_name }}" }
-          if (-not $v) { $v = "v1.0.0" }
+          $appv = "${{ steps.appver.outputs.appv }}"
+          if (-not $v) {
+            $v = "v$appv"
+            echo "未指定版本，回退到 app/config.py: $v"
+          }
+          if ($v.TrimStart('v') -ne $appv) {
+            throw "版本不一致：本次要打 $v，但 app/config.py 的 APP_VERSION 是 $appv。先改 app/config.py 再发版。"
+          }
           "version=$v" >> $env:GITHUB_OUTPUT
           echo "Building version $v"
 
@@ -84,9 +102,14 @@ jobs:
             "{0}  {1}" -f $p, $line
           }
 
+      # 产物同时挂到 Release 和 Actions artifact。artifact 只用于「挂 Release 那步
+      # 失败后手动取包」，留 7 天足够；之前用默认保留期，累积了 1.1 GB 冗余。
       - uses: actions/upload-artifact@v7
         with:
           name: SnapOCR-windows-x64
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
           path: |
             dist/SnapOCR.exe
             dist/*.7z

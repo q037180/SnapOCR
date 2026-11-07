@@ -3,6 +3,9 @@ import os
 
 APP_NAME = "SnapOCR"
 APP_TITLE = "SnapOCR - 本地离线截图OCR"
+# 单一版本来源：窗口标题、打包脚本、CI 校验都读这里。
+# 发版时只改这一行，release.yml 会校验 tag 与它一致，不一致直接失败。
+APP_VERSION = "1.0.3"
 
 HOTKEY = "ctrl+alt+q"  # 全局截图热键，可在下方修改，如 "ctrl+alt+o"
 AUTO_COPY = True  # 识别后自动复制到剪贴板

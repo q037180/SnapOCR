@@ -272,7 +272,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, preload: bool = True) -> None:
         super().__init__()
-        self.setWindowTitle(config.APP_TITLE)
+        self.setWindowTitle(f"{config.APP_TITLE} · v{config.APP_VERSION}")
         self.resize(640, 540)
         self.setAcceptDrops(True)  # 拖拽图片文件批量识别（Umi-OCR 批量 OCR）
         self._overlay: CaptureOverlay | None = None

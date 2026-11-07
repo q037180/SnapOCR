@@ -189,8 +189,11 @@ python entry.py
 - 环境要求：Python 3.10+（已在 3.12 验证）；Windows 10/11 完整支持，Linux / macOS 部分功能可用
 - 默认简体中文模型开箱即用、无需联网；**切换到繁中 / 英 / 日 / 韩时首次会联网下载对应识别模型**，下载后缓存在 `%APPDATA%\SnapOCR\models\`，之后离线可用
 - 也可以双击根目录的 `启动.bat`，它会自动检查并安装缺失依赖后启动
+- 打包与出图还需要额外依赖（pyinstaller / py7zr / Pillow）：`pip install -r requirements-dev.txt`
 - 想自己打包单文件版：`pyinstaller SnapOCR.spec --noconfirm`
-- 想自己打包绿色版：`pyinstaller SnapOCR-portable.spec --noconfirm --workpath build/portable --distpath dist`，再运行 `python tools/make_portable_7z.py`
+- 想自己打包绿色版：`pyinstaller SnapOCR-portable.spec --noconfirm --workpath build/portable --distpath dist`，再运行 `python tools/make_portable_7z.py`（版本号自动取自 `app/config.py` 的 `APP_VERSION`）
+- 改了演示图之后同步到落地页图床：`python tools/sync_assets.py`
+- 提交前自检：`python -m unittest discover -s tests -v`（校验版本号、下载链接、图片引用、图床一致性）
 
 性能参考：基于 RapidOCR（PP-OCRv6 模型），1080p 全屏识别约 7–10 秒（视 CPU 与文字密度），框选小区域秒出。
 

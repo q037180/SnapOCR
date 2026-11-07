@@ -1,0 +1,69 @@
+name: 识别不准 / 崩溃
+description: 某个截图识别不出来、整行漏字，或者程序打不开、闪退
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        深色截图识别失败是最有价值的反馈——作者就是靠这类样本调预处理阈值的。
+
+        **提交前请先试两件事**：① 换用 7z / zip 绿色包再跑一次（单文件 exe 有约 13% 的启动失败率，已知问题）；
+        ② 把截图放大 2 倍再识别一次，看能否出字。这两步能区分「引擎问题」和「打包问题」。
+  - type: input
+    id: version
+    attributes:
+      label: SnapOCR 版本
+      description: 窗口标题栏最后一行就写着，例如 v1.0.3
+      placeholder: v1.0.3
+    validations:
+      required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: 用的是哪个包
+      options:
+        - 7z 绿色包（推荐）
+        - zip 绿色包
+        - 单文件 SnapOCR.exe
+        - 从源码运行（python entry.py）
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: 系统版本
+      description: Win + R 输入 winver 可以看到，请写到小版本号
+      placeholder: Windows 11 23H2 (22631.4317)
+    validations:
+      required: true
+  - type: textarea
+    id: symptom
+    attributes:
+      label: 现象
+      description: 描述实际发生了什么。OCR 问题请说明是「整行没识别」还是「识别成乱码」还是「顺序错乱」。
+      placeholder: 框选 VS Code 里的报错栈，粘出来只有第一行，后面几行是空的。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望的文本
+      description: 把截图里本来应该识别出来的文字手打或粘贴上来（哪怕只有几行）
+    validations:
+      required: false
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开 VS Code（深色主题）
+        2. 按 Ctrl+Alt+Q 框选报错区域
+        3. 松开后剪贴板里只有第一行
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: |
+        **原始截图**请直接拖进评论框上传（GitHub 会自动转成图片链接）。
+        上传前务必把 token、密码、公司内部域名之类打码——截图会公开可见。
