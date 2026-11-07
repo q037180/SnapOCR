@@ -139,7 +139,7 @@
 | 产物 | 官方直链 | 国内镜像 |
 | --- | --- | --- |
 | **7z 绿色包 · 推荐**（120 MB） | [下载](https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR-v1.0.3-win64.7z) | [ghproxy 镜像](https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR-v1.0.3-win64.7z) |
-| zip 绿色包（155 MB，内容与 7z 完全相同） | [下载](https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR-v1.0.3-win64.zip) | [ghproxy 镜像](https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR-v1.0.3-win64.zip) |
+| zip 绿色包（163 MB，内容与 7z 完全相同） | [下载](https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR-v1.0.3-win64.zip) | [ghproxy 镜像](https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR-v1.0.3-win64.zip) |
 | 单文件 exe（163 MB，见下方[已知问题](#方式二单文件-exe)） | [下载](https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR.exe) | [ghproxy 镜像](https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR.exe) |
 
 > 7z：`29fec864e619aeff605c1dd11c3ed7b4693d7c72153f116dffc06c476be55177`
@@ -156,7 +156,7 @@
 Get-FileHash .\SnapOCR-v1.0.3-win64.7z -Algorithm SHA256
 ```
 
-> 同一份内容还提供 `SnapOCR-v1.0.3-win64.zip`（155 MB）：解压后与 7z 包**逐字节相同**，只是容器格式不同。它是给包管理器用的 —— winget 支持 zip 但不支持 7z，`winget` 的 SnapOCR 清单就指向这个文件。你手工安装的话用 7z 就行，体积小 35 MB。
+> 同一份内容还提供 `SnapOCR-v1.0.3-win64.zip`（163 MB）：解压后与 7z 包**逐字节相同**，只是容器格式不同。它是给包管理器用的 —— winget 支持 zip 但不支持 7z，`winget` 的 SnapOCR 清单就指向这个文件。你手工安装的话用 7z 就行，体积小 43 MB；机器上没装 7-Zip 时，zip 用资源管理器右键「全部解压缩」即可。
 
 ### 方式二：单文件 exe
 
