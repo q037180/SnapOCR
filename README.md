@@ -139,9 +139,12 @@
 | 产物 | 官方直链 | 国内镜像 |
 | --- | --- | --- |
 | **7z 绿色包 · 推荐**（120 MB） | [下载](https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR-v1.0.3-win64.7z) | [ghproxy 镜像](https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR-v1.0.3-win64.7z) |
-| 单文件 exe（163 MB） | [下载](https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR.exe) | [ghproxy 镜像](https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR.exe) |
+| zip 绿色包（155 MB，内容与 7z 完全相同） | [下载](https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR-v1.0.3-win64.zip) | [ghproxy 镜像](https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR-v1.0.3-win64.zip) |
+| 单文件 exe（163 MB，见下方[已知问题](#方式二单文件-exe)） | [下载](https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR.exe) | [ghproxy 镜像](https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR.exe) |
 
-> 7z：`29fec864e619aeff605c1dd11c3ed7b4693d7c72153f116dffc06c476be55177` · exe：`68dbec68c8bb8934e045e2ab324d609938acf999ee0e54df4d8bda2c683a5abf`
+> 7z：`29fec864e619aeff605c1dd11c3ed7b4693d7c72153f116dffc06c476be55177`
+> zip：`d6fdf2b05660a6a796183552cfd2166c4e1ed2c8a3344d455ee633d197a75591`
+> exe：`68dbec68c8bb8934e045e2ab324d609938acf999ee0e54df4d8bda2c683a5abf`
 
 ### 方式一：7z 绿色包（推荐）
 
@@ -153,9 +156,17 @@
 Get-FileHash .\SnapOCR-v1.0.3-win64.7z -Algorithm SHA256
 ```
 
+> 同一份内容还提供 `SnapOCR-v1.0.3-win64.zip`（155 MB）：解压后与 7z 包**逐字节相同**，只是容器格式不同。它是给包管理器用的 —— winget 支持 zip 但不支持 7z，`winget` 的 SnapOCR 清单就指向这个文件。你手工安装的话用 7z 就行，体积小 35 MB。
+
 ### 方式二：单文件 exe
 
 下载 `SnapOCR.exe`，双击即用——无需安装 Python，内置简体中文模型，默认识别完全离线；切换其他语言首次需联网下载对应模型。
+
+> **已知问题：单文件版有约 13% 的概率启动失败。** 它是 PyInstaller onefile 打包，每次运行都要把 155 MB 解压到临时目录，这一步偶尔会失败——表现为双击后没有任何窗口，退出码 127（`ERROR_PROC_NOT_FOUND`，解压后找不到 DLL）。
+>
+> 本机（Windows 11 x64）实测：单文件版 52 次启动失败 7 次（13.5%）；把临时目录换到另一块盘仍是 20 次里失败 3 次，所以与磁盘和临时目录无关，是 onefile 形态本身的问题。**同一份 onedir 产物 20 次启动 0 次失败**。
+>
+> 结论：**日常使用请用上面的 7z / zip 绿色包**，单文件版只适合临时取用、或用在不方便解压的场合。失败时重开一次基本就能起来，但仍然建议换绿色包。这个问题会在后续版本里处理。
 
 > **关于 SmartScreen 提示**：本程序暂未做代码签名，首次运行时 Windows 可能弹出「Windows 已保护你的电脑」（绿色包同样如此）。这是未签名开源程序的正常提示，点「更多信息」→「仍要运行」即可。建议先核对 Release 页的 SHA-256 校验值再运行。如果介意，请从源码自行构建。
 

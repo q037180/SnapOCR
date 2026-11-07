@@ -14,7 +14,7 @@
 | 推广稿配图改 Pages 图床 + 本地图包清单 | `READY-TO-POST.md` §1、`VIRAL-COPY.md` §6 | 解决掘金外链图「转存失败」把提示文本写进正文；外链用干净的 Pages URL |
 | Social Preview 1280×640 | `assets/social-preview.png`、`tools/make_social_preview.py` | 分享卡片从灰色默认图换成真实产品图；脚本可复现 |
 | GitHub Pages 落地页 | `docs/index.html`、`docs/.nojekyll`、`docs/assets/`（1.7 MB） | 中英元数据 + JSON-LD + 双下载链接 + FAQ，可被搜索引擎收录；不依赖任何外部 CDN |
-| winget 四件套 | `launch/winget/manifests/q/q037180/SnapOCR/1.0.3/` | `winget install q037180.SnapOCR`；用 exe，因为 winget 不支持 7z |
+| winget 清单 | `launch/winget/manifests/q/q037180/SnapOCR/1.0.3/` | **PR 已提交上游**：[microsoft/winget-pkgs#473681](https://github.com/microsoft/winget-pkgs/pull/473681)（`winget validate` 零警告）。用 zip + `NestedInstallerType: portable`，因为单文件 exe 实测有 13.5% 启动失败率，详见 QA 报告第 10 章 |
 | Scoop 清单 | `launch/scoop/snapocr.json` | 用 7z 绿色包，含 `checkver` / `autoupdate`，后续发版自动跟随 |
 | 收录投稿稿 | `launch/listings.md` | HelloGitHub / AlternativeTo / awesome-\* / 中文站点的复制即用文案与提交步骤 |
 | 技术长文 ×2 | `launch/post-tech-1.md`、`launch/post-tech-2.md` | 把 QA 报告里 40 项修复拆成可发的稿子，数字全部核对过报告原文 |
@@ -57,7 +57,16 @@ https://q037180.github.io/SnapOCR/ （百度需要站长验证，属于可选项
 
 ### 4. 提交被动分发渠道（一次投入、长期有量，穿插在发帖之后做）
 
-按 `launch/listings.md`：HelloGitHub 月刊 → winget PR → AlternativeTo → Scoop bucket → awesome-\* 列表。
+**winget 已经替你提交了**：[microsoft/winget-pkgs#473681](https://github.com/microsoft/winget-pkgs/pull/473681)。
+只剩一步需要你本人做——签 CLA（法律声明，我不能代签）：打开 PR 页面，在评论框回复这一句并发送：
+
+```
+@microsoft-github-policy-service agree
+```
+
+回复后 bot 会自动把 `license/cla` 检查转为通过，然后等人工审核（新包通常几天）。
+
+其余渠道按 `launch/listings.md`：HelloGitHub 月刊 → AlternativeTo → Scoop bucket → awesome-\* 列表。
 **一次只投一个**，别同日群发同一段话。
 
 ### 5. 一直没做、但会持续吃掉转化

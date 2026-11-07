@@ -63,11 +63,13 @@ jobs:
           $v = "${{ steps.ver.outputs.version }}"
           $big = @(
             "dist/SnapOCR.exe",
-            "dist/SnapOCR-$v-win64.7z"
+            "dist/SnapOCR-$v-win64.7z",
+            "dist/SnapOCR-$v-win64.zip"
           )
           $sums = @(
             "dist/SnapOCR.exe.sha256",
-            "dist/SnapOCR-$v-win64.7z.sha256"
+            "dist/SnapOCR-$v-win64.7z.sha256",
+            "dist/SnapOCR-$v-win64.zip.sha256"
           )
           foreach ($p in $big) {
             if (-not (Test-Path $p)) { throw "Missing build output: $p" }
@@ -88,6 +90,7 @@ jobs:
           path: |
             dist/SnapOCR.exe
             dist/*.7z
+            dist/*.zip
             dist/*.sha256
 
       # Release notes are maintained by hand; auto-generation would overwrite them.
@@ -98,5 +101,6 @@ jobs:
           files: |
             dist/SnapOCR.exe
             dist/*.7z
+            dist/*.zip
             dist/*.sha256
           generate_release_notes: false

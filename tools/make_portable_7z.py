@@ -1,29 +1,39 @@
 # -*- coding: utf-8 -*-
-"""生成 Windows 免安装 7z 绿色包 + SHA-256 校验文件。
+"""生成 Windows 免安装 7z 绿色包 + zip 包 + SHA-256 校验文件。
 
 打包的是 PyInstaller onedir 产物 dist/SnapOCR/（exe + 依赖目录），
 不是单文件 exe：解压一次后启动不再自解压 160 MB，冷启动明显更快。
+
+同时产出一份内容相同的 zip，用于 winget 分发：winget 的 InstallerType
+不支持 7z，但支持 zip + NestedInstallerType: portable。之所以不用单文件
+exe 交给 winget，是因为 PyInstaller onefile 每次启动都要解压 155 MB 到临时
+目录，实测 52 次启动有 7 次以 127（ERROR_PROC_NOT_FOUND）失败。
 
 运行：venv/Scripts/python.exe tools/make_portable_7z.py
 输出（版本号取自环境变量 SNAP_OCR_VERSION，默认 v1.0.0）：
   dist/SnapOCR-<version>-win64.7z
   dist/SnapOCR-<version>-win64.7z.sha256
+  dist/SnapOCR-<version>-win64.zip
+  dist/SnapOCR-<version>-win64.zip.sha256
   dist/SnapOCR.exe.sha256
+环境变量 SNAP_OCR_DIST 可覆盖 dist 目录（本地复查用）。
 """
 from __future__ import annotations
 
 import hashlib
 import os
+import zipfile
 
 import py7zr
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DIST = os.path.join(ROOT, "dist")
+DIST = os.environ.get("SNAP_OCR_DIST") or os.path.join(ROOT, "dist")
 EXE = os.path.join(DIST, "SnapOCR.exe")  # 单文件版，仅用于附带生成校验值
 PORTABLE_DIR = os.path.join(DIST, "SnapOCR")  # PyInstaller onedir 产物
 PORTABLE_EXE = os.path.join(PORTABLE_DIR, "SnapOCR.exe")
 VERSION = os.environ.get("SNAP_OCR_VERSION", "v1.0.0").strip() or "v1.0.0"
 ARCHIVE = os.path.join(DIST, f"SnapOCR-{VERSION}-win64.7z")
+ZIP = os.path.join(DIST, f"SnapOCR-{VERSION}-win64.zip")
 NOTE = os.path.join(DIST, "使用说明.txt")
 PRESET = 7  # LZMA2 字典更大，对内置 ONNX 模型更有效；打包慢一些但下载体积更小
 
@@ -83,6 +93,36 @@ def dir_size(path):
     )
 
 
+def make_zip():
+    """把 onedir 目录原样压成 zip，供 winget 的 zip + nested portable 使用。
+
+    条目路径带顶层 SnapOCR/，与 7z 包保持一致，
+    这样 manifest 里写 RelativeFilePath: SnapOCR\\SnapOCR.exe 即可。
+    """
+    tmp = ZIP + ".tmp"
+    if os.path.exists(tmp):
+        os.remove(tmp)
+    # PyInstaller 的 dist/SnapOCR/ 本身不含「使用说明.txt」，要额外写进去；
+    # 但如果目录里已经有（比如从已发布的 7z 解压出来复查），就不能再写一遍，
+    # 否则 zip 里会出现两个同名条目。
+    has_note = os.path.isfile(os.path.join(PORTABLE_DIR, "使用说明.txt"))
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+        for dp, dns, fns in os.walk(PORTABLE_DIR):
+            dns.sort()
+            for fn in sorted(fns):
+                full = os.path.join(dp, fn)
+                arc = "SnapOCR/" + os.path.relpath(full, PORTABLE_DIR).replace(os.sep, "/")
+                z.write(full, arc)
+        if os.path.isfile(NOTE) and not has_note:
+            z.write(NOTE, "SnapOCR/使用说明.txt")
+    with zipfile.ZipFile(tmp) as z:
+        names = z.namelist()
+        print("zip entries:", len(names), "has exe:", "SnapOCR/SnapOCR.exe" in names)
+    os.replace(tmp, ZIP)
+    print("zip", os.path.getsize(ZIP) // 1024 // 1024, "MB")
+    write_checksum(ZIP, os.path.basename(ZIP))
+
+
 def main():
     if not os.path.isfile(PORTABLE_EXE):
         raise SystemExit(
@@ -99,9 +139,12 @@ def main():
     if os.path.exists(tmp):
         os.remove(tmp)
     filters = [{"id": py7zr.FILTER_LZMA2, "preset": PRESET}]
+    has_note = os.path.isfile(os.path.join(PORTABLE_DIR, "使用说明.txt"))
     with py7zr.SevenZipFile(tmp, "w", filters=filters) as z:
         z.writeall(PORTABLE_DIR, "SnapOCR")
-        z.write(NOTE, "SnapOCR/使用说明.txt")
+        if not has_note:  # 目录里已有就不再写，避免同名条目
+            z.write(NOTE, "SnapOCR/使用说明.txt")
+    make_zip()  # 要赶在删掉 NOTE 之前，zip 里同样带「使用说明.txt」
     os.remove(NOTE)
 
     print("archive", os.path.getsize(tmp) // 1024 // 1024, "MB")
