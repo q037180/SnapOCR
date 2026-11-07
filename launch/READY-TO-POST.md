@@ -53,7 +53,7 @@
 - 灰度标准差 **< 45**（浅灰字、水印字、低对比 UI）→ 对 LAB 的 L 通道再跑一次 CLAHE
 - 小选区放大 **2–3 倍** 再送进模型
 
-![深色截图预处理前后的真实像素对比](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/compare-dark-ui.png)
+![深色截图预处理前后的真实像素对比](https://raw.githubusercontent.com/q037180/SnapOCR/main/assets/compare-dark-ui.png)
 
 右图是代码里 `_enhance()` 对左图跑出来的真实像素结果，不是画的示意图。我故意没放「识别结果对比」——挑一张对自己有利的截图当准确率证据没什么意思，欢迎拿自己的深色截图实测。
 
@@ -63,7 +63,7 @@
 
 改动很小，但用起来差别很大。
 
-![15 秒串联演示：框选识别 → 历史搜索 → 定格](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/hero-15s.gif)
+![15 秒串联演示：框选识别 → 历史搜索 → 定格](https://raw.githubusercontent.com/q037180/SnapOCR/main/assets/hero-15s.gif)
 
 ## 顺手做的功能
 
@@ -147,11 +147,21 @@ Windows 11 截图工具的「文本操作」、PowerToys 文本提取器，日�
 （叫 SnapOCR 的项目有好几个，这个是 q037180/SnapOCR，MIT，Python + PySide6 + RapidOCR。）
 ```
 
-### 配图外链（插在正文对应位置）
+### 配图（**优先本地上传，别用外链**）
+
+发布平台的编辑器会把外链图转存到自己的图床，GitHub release-assets 带 SAS 签名参数时转存必失败，把提示文本写进正文。先在本地仓库取这两张图，用编辑器「上传图片」插入：
 
 ```
-https://github.com/q037180/SnapOCR/releases/download/v1.0.0/compare-dark-ui.png
-https://github.com/q037180/SnapOCR/releases/download/v1.0.0/hero-15s.gif
+<仓库>/assets/compare-dark-ui.png   ← 首图，预处理前后真实像素对比
+<仓库>/assets/hero-15s.gif          ← 15 秒串联演示
+<仓库>/assets/social-preview.png    ← 需要封面/分享卡片时
+```
+
+确实要用外链时（如 V2EX 只收链接），用 raw 域名，别用 release-assets：
+
+```
+https://raw.githubusercontent.com/q037180/SnapOCR/main/assets/compare-dark-ui.png
+https://raw.githubusercontent.com/q037180/SnapOCR/main/assets/hero-15s.gif
 ```
 
 ### 自己补的第一条评论（发完立刻贴，可选但推荐）

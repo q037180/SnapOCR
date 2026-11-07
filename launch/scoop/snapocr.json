@@ -1,0 +1,38 @@
+{
+    "$schema": "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json",
+    "version": "1.0.3",
+    "description": "离线截图 OCR：深色界面自动反色，识别结果进历史可搜索（Windows, MIT）",
+    "homepage": "https://github.com/q037180/SnapOCR",
+    "license": "MIT",
+    "notes": "运行 SnapOCR 后按 Ctrl+Alt+Q 框选屏幕区域即可取字。首次运行 Windows SmartScreen 可能提示，点「更多信息 → 仍要运行」。",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR-v1.0.3-win64.7z",
+            "hash": "29fec864e619aeff605c1dd11c3ed7b4693d7c72153f116dffc06c476be55177",
+            "extract_dir": "SnapOCR"
+        }
+    },
+    "bin": "SnapOCR.exe",
+    "shortcuts": [
+        [
+            "SnapOCR.exe",
+            "SnapOCR"
+        ]
+    ],
+    "checkver": {
+        "github": "https://github.com/q037180/SnapOCR",
+        "regex": "v?([\\d.]+)$"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/q037180/SnapOCR/releases/download/v$version/SnapOCR-v$version-win64.7z"
+            }
+        },
+        "hash": {
+            "url": "$url.sha256",
+            "regex": "^([A-Fa-f0-9]{64})"
+        },
+        "extract_dir": "SnapOCR"
+    }
+}

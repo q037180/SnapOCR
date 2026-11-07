@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="https://github.com/q037180/SnapOCR/releases/download/v1.0.0/icon.png" width="128" alt="SnapOCR"/>
+<img src="assets/icon.png" width="128" alt="SnapOCR"/>
 
 ## SnapOCR 文字识别工具
 
@@ -12,13 +12,13 @@
 [![issues](https://img.shields.io/github/issues/q037180/SnapOCR?style=flat-square)](https://github.com/q037180/SnapOCR/issues)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue?style=flat-square)](#跨平台兼容性)
 
-### [使用说明](#目录) · [安装](#安装) · [提交 Bug](https://github.com/q037180/SnapOCR/issues)
+### [下载](#安装) · [使用说明](#目录) · [安装](#安装) · [提交 Bug](https://github.com/q037180/SnapOCR/issues)
 
 **截屏取字只按一次热键；识别过的内容，随时能搜回来。**
 
 免费 · 开源（MIT）· 识别在本机完成，不上传任何截图
 
-![截图识别演示：按热键框选，松开即复制到剪贴板](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo.gif)
+![截图识别演示：按热键框选，松开即复制到剪贴板](assets/demo.gif)
 
 </div>
 
@@ -30,9 +30,9 @@
 2. **识别结果要回头找**：剪贴板只记得最后一次，SnapOCR 记得每一次。所有结果自动进历史，关键词即时过滤、悬停浮窗预览、双击再次复制，还能一键导出 txt / docx / pdf / md / xlsx。
 3. **一整页 / 一整批**：滚动长截图拼接、PDF 逐页识别、文件夹拖入批量队列，配合表格转 Excel 与截屏翻译，一次做完，不用在几个工具之间来回倒。
 
-![历史搜索演示：识别结果随时搜回来](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/preview-hover.gif)
+![历史搜索演示：识别结果随时搜回来](assets/preview-hover.gif)
 
-> 想一次看完 15 秒串联演示（截图识别 → 历史搜索 → 导出）：[hero-15s.gif](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/hero-15s.gif)
+> 想一次看完 15 秒串联演示（截图识别 → 历史搜索 → 导出）：[hero-15s.gif](assets/hero-15s.gif)
 >
 > <sub>演示图均为完整清晰度版本（合计约 6.9 MB）。若长时间空白不显示，是当前网络访问 GitHub 资源受限（不是图挂了），可直接在仓库 `assets/` 目录里查看同名文件。</sub>
 
@@ -55,7 +55,7 @@
 * [项目结构](#项目结构)
 * [开发计划](#开发计划)
 
-![功能总览：PDF 识别 / 贴图 / 批量 / 导出](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo-features.gif)
+![功能总览：PDF 识别 / 贴图 / 批量 / 导出](assets/demo-features.gif)
 
 ---
 
@@ -69,13 +69,13 @@
 - **二维码**：框选区域没有文字时自动兜底解码二维码
 - **智能排版**：按行还原排版，多栏文本不乱序
 
-![截图识别演示](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo.gif)
+![截图识别演示](assets/demo.gif)
 
 ## 批量识别
 
 把图片或整个文件夹拖进主窗口，自动加入批量队列（递归收集、去重、上限 500 张），点「开始识别」逐张处理，结果按文件名分组进入历史记录，之后可以按关键词搜回来。
 
-![批量识别演示](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo-batch.gif)
+![批量识别演示](assets/demo-batch.gif)
 
 ## PDF 整档识别
 
@@ -85,19 +85,19 @@
 
 框选表格区域 → 自动识别为行列矩阵 → 预览可编辑 → 一键保存 Excel（xlsx）。
 
-![表格识别演示](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo-table.gif)
+![表格识别演示](assets/demo-table.gif)
 
 ## 截图贴图
 
 框选后图片钉在桌面置顶显示，可同时钉多张：拖动移动、滚轮缩放、`Ctrl+滚轮` 调透明度、双击或右键关闭。
 
-![截图贴图演示](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo-pin.gif)
+![截图贴图演示](assets/demo-pin.gif)
 
 ## 截屏翻译
 
 热键 `Ctrl+Alt+T` 框选英文段落 → 识别 → 自动弹出翻译窗口得到中文译文。原文可编辑后重译，支持简繁中文、英、日、韩、法、德、西、俄、越、泰 11 种语言互译（必应翻译为主，MyMemory 兜底，免费无需 API Key）。
 
-![截屏翻译演示](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/preview-translate.gif)
+![截屏翻译演示](assets/preview-translate.gif)
 
 ## 长截图
 
@@ -112,7 +112,7 @@
 - 大批量导出在后台线程进行，界面不冻结；内容超过 20 万字会先提示预计耗时，导出中可取消
 - 历史写入采用「临时文件 + 原子替换」：断电或磁盘写满不会把已有记录截断成半个文件
 
-![历史预览演示](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/preview-hover.gif)
+![历史预览演示](assets/preview-hover.gif)
 
 ## 全局设置
 
@@ -133,6 +133,15 @@
 ## 安装
 
 > **目前只有 Windows 10/11 x64 提供可直接运行的二进制。** Linux / macOS 需要从源码运行，且部分功能受限，详见[跨平台兼容性](#跨平台兼容性)。
+
+**下载 v1.0.3**（两个链接是同一个文件，SHA-256 一致，慢或断流时用镜像）：
+
+| 产物 | 官方直链 | 国内镜像 |
+| --- | --- | --- |
+| **7z 绿色包 · 推荐**（120 MB） | [下载](https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR-v1.0.3-win64.7z) | [ghproxy 镜像](https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR-v1.0.3-win64.7z) |
+| 单文件 exe（163 MB） | [下载](https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR.exe) | [ghproxy 镜像](https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR.exe) |
+
+> 7z：`29fec864e619aeff605c1dd11c3ed7b4693d7c72153f116dffc06c476be55177` · exe：`68dbec68c8bb8934e045e2ab324d609938acf999ee0e54df4d8bda2c683a5abf`
 
 ### 方式一：7z 绿色包（推荐）
 
@@ -285,9 +294,9 @@ Built-in OCR (Windows Snipping Tool, PowerToys Text Extractor, macOS Live Text) 
 - Export: `.txt` / `.docx` / `.pdf` / `.md` / `.xlsx`
 - Performance reference: ~7–10 s for a full 1080p screen on CPU (depends on CPU and text density); small regions are near-instant
 
-![Capture demo](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/demo.gif)
+![Capture demo](assets/demo.gif)
 
-![Searchable history](https://github.com/q037180/SnapOCR/releases/download/v1.0.0/preview-hover.gif)
+![Searchable history](assets/preview-hover.gif)
 
 ### Install (Windows 10/11 x64)
 

@@ -95,6 +95,8 @@ Offline screenshot OCR for dark IDEs and dark-mode pages — auto-inverts dark c
 
 **仍需你本人做**
 
+> 2026-11-07 补充：曝光侧的素材、落地页、包管理器清单已全部备好，见 **`launch/EXPOSURE-SETUP.md`**（含「你只需点这几下」清单与线上数据基线）。下面是首发时列的原始待办。
+
 - 注册或登录各平台、**实际发帖**（我没有你的社区账号，也不替你对外发言）
 - 发完 2 小时内回评论，48 小时内填记录表
 - 代码签名证书（需购买 / 申请，签名后再发版可消除 SmartScreen 提示）

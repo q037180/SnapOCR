@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SnapOCR - 离线截图 OCR，深色界面也能准确取字</title>
+<meta name="description" content="SnapOCR 是免费开源的 Windows 截图文字识别工具：按一次热键框选即复制到剪贴板，深色 IDE 与暗色网页自动反色增强，识别结果全部进历史可搜索，支持批量图片、PDF、表格转 Excel、长截图与截屏翻译。识别全程离线，不上传任何截图。">
+<meta name="keywords" content="截图OCR,离线OCR,文字识别,深色模式,截图取字,Windows OCR,表格转Excel,PDF识别,长截图,剪贴板历史,SnapOCR">
+<link rel="canonical" href="https://q037180.github.io/SnapOCR/">
+<link rel="icon" href="assets/icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="SnapOCR - 截屏取字，只按一次热键">
+<meta property="og:description" content="深色界面自动反色增强，识别结果随时搜回来。免费、开源 MIT、完全离线。Windows 10/11。">
+<meta property="og:image" content="https://q037180.github.io/SnapOCR/assets/social-preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"SnapOCR",
+ "description":"Windows 离线截图 OCR：深色界面自动反色、识别历史全文搜索、批量与 PDF 识别、表格转 Excel。",
+ "applicationCategory":"UtilitiesApplication","operatingSystem":"Windows 10 / 11 x64",
+ "url":"https://q037180.github.io/SnapOCR/","softwareVersion":"1.0.3",
+ "downloadUrl":"https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR-v1.0.3-win64.7z",
+ "license":"https://opensource.org/licenses/MIT",
+ "offers":{"@type":"Offer","price":"0","priceCurrency":"CNY"},
+ "author":{"@type":"Organization","name":"SnapOCR Contributors"}}
+</script>
+<style>
+:root{--ink:#14213d;--sub:#536684;--line:#dde6f3;--blue:#2563eb;--blue-d:#1d4ed8;--bg:#f7faff;--card:#fff}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+header{background:rgba(255,255,255,.9);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:9;backdrop-filter:blur(8px)}
+.nav{display:flex;align-items:center;gap:28px;height:64px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:19px;color:var(--ink)}
+.brand img{width:30px;height:30px}
+.nav .links{display:flex;gap:22px;margin-left:auto;font-size:15px;flex-wrap:wrap}
+.nav .links a{color:var(--sub)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 26px;border-radius:10px;font-weight:600;font-size:16px;border:1px solid transparent;cursor:pointer;transition:.15s}
+.btn-p{background:var(--blue);color:#fff}.btn-p:hover{background:var(--blue-d);text-decoration:none;color:#fff}
+.btn-s{background:#fff;color:var(--blue);border-color:#bcd0f5}.btn-s:hover{text-decoration:none;border-color:var(--blue)}
+.hero{padding:76px 0 56px;display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+.hero h1{font-size:46px;line-height:1.25;margin:0 0 18px;letter-spacing:-.5px}
+.hero .lead{font-size:20px;color:var(--sub);margin:0 0 28px}
+.hero .cta{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.hero .meta{font-size:14px;color:var(--sub)}
+.hero figure{margin:0;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;box-shadow:0 18px 48px rgba(30,60,120,.09)}
+.hero img{width:100%;display:block;border-radius:10px}
+.badges{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 26px;padding:0;list-style:none}
+.badges li{background:#e6efff;color:#1e4fa8;border:1px solid #cfe0fb;border-radius:999px;padding:5px 14px;font-size:14px}
+section{padding:52px 0;border-top:1px solid var(--line)}
+h2{font-size:30px;margin:0 0 10px;letter-spacing:-.3px}
+.sect-lead{color:var(--sub);margin:0 0 30px;font-size:17px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px}
+.card h3{margin:0 0 10px;font-size:19px}
+.card p{margin:0;color:var(--sub);font-size:15px}
+.card .num{display:inline-block;width:28px;height:28px;line-height:28px;text-align:center;background:#e6efff;color:var(--blue);border-radius:8px;font-size:14px;font-weight:700;margin-bottom:12px}
+figure.shot{margin:0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px}
+figure.shot img{width:100%;display:block;border-radius:8px}
+figure.shot figcaption{font-size:14px;color:var(--sub);padding:10px 6px 2px;text-align:center}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:15px}
+th,td{padding:13px 16px;text-align:left;border-bottom:1px solid var(--line)}
+th{background:#eef4ff;font-weight:600}tr:last-child td{border-bottom:0}
+code{background:#eef2f9;padding:2px 7px;border-radius:5px;font-size:13px;word-break:break-all}
+.note{background:#fff8e8;border:1px solid #f4dfae;border-radius:10px;padding:14px 18px;font-size:14px;color:#6b5423;margin-top:18px}
+details{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin-bottom:10px}
+summary{cursor:pointer;font-weight:600}details p{margin:10px 0 0;color:var(--sub);font-size:15px}
+footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--sub);font-size:14px}
+footer .links{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:10px}
+.toast{position:fixed;left:50%;bottom:32px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:10px 20px;border-radius:8px;opacity:0;pointer-events:none;transition:.2s;font-size:14px}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+@media(max-width:820px){.hero{grid-template-columns:1fr;padding:44px 0 36px}.hero h1{font-size:34px}.grid,.two{grid-template-columns:1fr}.nav{gap:12px;height:auto;padding:12px 0}.nav .links{margin-left:0;width:100%}h2{font-size:25px}}
+</style>
+</head>
+<body>
+<header><div class="wrap nav">
+  <a class="brand" href="#top"><img src="assets/icon.png" alt="">SnapOCR</a>
+  <nav class="links"><a href="#why">为什么不一样</a><a href="#features">功能</a><a href="#download">下载</a><a href="#faq">常见问题</a><a href="https://github.com/q037180/SnapOCR">GitHub</a></nav>
+</div></header>
+
+<main id="top">
+<div class="wrap hero">
+  <div>
+    <ul class="badges"><li>完全离线</li><li>免费开源 MIT</li><li>Windows 10/11</li></ul>
+    <h1>截屏取字，<br>只按一次热键</h1>
+    <p class="lead">深色 IDE 与暗色网页自动反色增强，识别过的内容随时能搜回来。识别全程在本机完成，不上传任何截图。</p>
+    <div class="cta"><a class="btn btn-p" href="#download">下载 v1.0.3 · 120 MB</a><a class="btn btn-s" href="https://github.com/q037180/SnapOCR">查看源码</a></div>
+    <p class="meta">默认热键 Ctrl+Alt+Q · 绿色包解压即用 · 无需安装、不写注册表</p>
+  </div>
+  <figure><img src="assets/demo.gif" alt="按热键框选屏幕区域，松开后文字自动复制到剪贴板"></figure>
+</div>
+
+<section id="why"><div class="wrap">
+  <h2>系统自带 OCR 够用时，不需要它</h2>
+  <p class="sect-lead">它解决的是自带工具容易失手的那三类时刻。</p>
+  <div class="grid">
+    <div class="card"><span class="num">1</span><h3>深色界面整行漏识别</h3><p>深色背景配浅色字，检测模型容易漏检。先判断整体亮度自动反色，再对低对比度区域做 CLAHE 增强，最后才送去识别。代码、报错栈、暗色文档框完就能复制。</p></div>
+    <div class="card"><span class="num">2</span><h3>剪贴板只记得最后一次</h3><p>每次识别结果自动进历史，关键词即时过滤、悬停浮窗预览、双击再次复制，可导出 txt / docx / pdf / md / xlsx。</p></div>
+    <div class="card"><span class="num">3</span><h3>一整页、一整批</h3><p>滚动长截图拼接、PDF 逐页识别、文件夹拖入批量队列，配合表格转 Excel 与截屏翻译，一次做完。</p></div>
+  </div>
+  <div style="margin-top:24px"><figure class="shot"><img src="assets/compare-dark-ui.png" alt="深色主题截图在预处理前后的真实像素对比"><figcaption>深色界面预处理前后 · 真实像素对比，不是识别率对比</figcaption></figure></div>
+</div></section>
+
+<section id="features"><div class="wrap">
+  <h2>一个热键之后，还能做这些</h2>
+  <p class="sect-lead">所有功能都在同一个窗口里，不需要在几个工具之间来回倒。</p>
+  <div class="grid">
+    <div class="card"><h3>框选识别</h3><p>自动反色与 CLAHE 增强、多行合并自然段、中文智能排版去字间空格、无文字时兜底解二维码。</p></div>
+    <div class="card"><h3>批量与 PDF</h3><p>拖入文件夹递归收集去重（上限 500 张）；PDF 逐页约 144 dpi 渲染，带进度条可取消，结果按页分组。</p></div>
+    <div class="card"><h3>表格转 Excel</h3><p>框选表格识别为行列矩阵，预览可编辑，空单元格不会导致右侧列错位，一键保存 xlsx。</p></div>
+    <div class="card"><h3>长截图</h3><p>Ctrl+Alt+L 框选后自动注入滚轮逐帧拼接，滚到底自动结束，可直接识别或翻译。</p></div>
+    <div class="card"><h3>截屏翻译</h3><p>Ctrl+Alt+T 框选即译，原文可编辑后重译，11 种语言互译，免费无需 API Key。</p></div>
+    <div class="card"><h3>截图贴图</h3><p>把框选内容钉在桌面置顶，可同时钉多张，滚轮缩放、Ctrl+滚轮调透明度。</p></div>
+  </div>
+  <div class="two" style="margin-top:22px">
+    <figure class="shot"><img src="assets/hero-15s.gif" alt="15 秒串联演示：截图识别、历史搜索、导出"><figcaption>15 秒串联演示：识别 → 历史搜索 → 导出</figcaption></figure>
+    <figure class="shot"><img src="assets/demo-table.gif" alt="框选表格并导出为 Excel"><figcaption>表格识别 → 可编辑预览 → 导出 xlsx</figcaption></figure>
+  </div>
+</div></section>
+
+<section id="download"><div class="wrap">
+  <h2>下载</h2>
+  <p class="sect-lead">两个链接是同一个文件，SHA-256 一致。官方直链慢或断流时用镜像。</p>
+  <table>
+    <tr><th>产物</th><th>官方直链</th><th>国内镜像</th><th>SHA-256</th></tr>
+    <tr><td><strong>7z 绿色包（推荐）</strong><br><span style="color:var(--sub);font-size:14px">120 MB · 启动约 2.5 秒</span></td>
+      <td><a href="https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR-v1.0.3-win64.7z">下载</a></td>
+      <td><a href="https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR-v1.0.3-win64.7z">ghproxy</a></td>
+      <td><code>29fec864…be55177</code></td></tr>
+    <tr><td>单文件 exe<br><span style="color:var(--sub);font-size:14px">163 MB · 每次启动自解压</span></td>
+      <td><a href="https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR.exe">下载</a></td>
+      <td><a href="https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR.exe">ghproxy</a></td>
+      <td><code>68dbec68…683a5abf</code></td></tr>
+  </table>
+  <p style="margin-top:18px">解压得到 <code>SnapOCR/</code> 文件夹，进入后双击 <code>SnapOCR.exe</code> 即用。完整校验值见 <a href="https://github.com/q037180/SnapOCR/releases/tag/v1.0.3">Release 页</a>。</p>
+  <div class="note"><strong>关于 SmartScreen：</strong>程序暂未做代码签名，首次运行 Windows 可能提示「已保护你的电脑」，点「更多信息 → 仍要运行」即可。建议先核对 SHA-256。<br><strong>下载到一半断流：</strong>用支持断点续传的下载器，或 <code>curl -C - -L -o SnapOCR.7z &lt;镜像链接&gt;</code> 重跑续传。</div>
+  <p style="margin-top:18px"><button class="btn btn-s" id="copy" type="button">复制镜像下载链接</button></p>
+</div></section>
+
+<section id="faq"><div class="wrap">
+  <h2>常见问题</h2>
+  <details><summary>识别会把截图传到服务器吗？</summary><p>不会。内置简体中文模型，默认识别全程离线。切换到繁中 / 英 / 日 / 韩时<strong>首次</strong>需联网下载对应模型，缓存在本地后即可离线使用。截屏翻译功能会调用在线翻译服务，与 OCR 识别是两回事。</p></details>
+  <details><summary>支持 macOS / Linux 吗？</summary><p>目前只提供 Windows 10/11 x64 二进制。Linux / macOS 可从源码运行，但长截图的自动滚轮注入依赖 Win32 API，在这两个平台上会给出提示；其余识别功能可用。</p></details>
+  <details><summary>深色截图为什么比普通截图难识别？</summary><p>文字检测模型主要在白底黑字样本上训练，深色背景配浅色字时对比度分布相反，容易整行漏检。SnapOCR 在送进模型前判断整体亮度并自动反色，再用 CLAHE 提局部对比度。</p></details>
+  <details><summary>历史记录存在哪？会丢吗？</summary><p><code>%APPDATA%\SnapOCR\history.json</code>。写入采用「临时文件 + 原子替换」，断电或磁盘写满不会把已有记录截断成半个文件；文件被手工改坏时程序会跳过损坏条目并提示，不会双击没反应。</p></details>
+  <details><summary>热键冲突、想改键怎么办？</summary><p>设置 → 快捷键，可录制主截图 / 截屏翻译 / 长截图三个热键，即时生效。默认是 Ctrl+Alt+Q / Ctrl+Alt+T / Ctrl+Alt+L。</p></details>
+</div></section>
+</main>
+
+<footer><div class="wrap">
+  <div class="links"><a href="https://github.com/q037180/SnapOCR">GitHub 仓库</a><a href="https://github.com/q037180/SnapOCR/releases">全部版本</a><a href="https://github.com/q037180/SnapOCR/issues">提交 Bug 或反馈</a><a href="https://github.com/q037180/SnapOCR/blob/main/README.md">完整使用说明</a><a href="https://github.com/q037180/SnapOCR/blob/main/LICENSE">MIT License</a></div>
+  <div>SnapOCR · 免费开源，识别在本机完成，不上传任何截图。页面图片均为真实操作录屏与像素对比。</div>
+</div></footer>
+<div class="toast" id="toast">镜像链接已复制</div>
+<script>
+document.getElementById('copy').addEventListener('click',function(){
+  var u='https://ghproxy.net/https://github.com/q037180/SnapOCR/releases/download/v1.0.3/SnapOCR-v1.0.3-win64.7z';
+  var done=function(){var t=document.getElementById('toast');t.classList.add('on');setTimeout(function(){t.classList.remove('on')},1800)};
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(u).then(done,function(){fallback(u,done)})}else{fallback(u,done)}
+});
+function fallback(u,cb){var i=document.createElement('textarea');i.value=u;document.body.appendChild(i);i.select();try{document.execCommand('copy');cb()}catch(e){}document.body.removeChild(i)}
+</script>
+</body>
+</html>
