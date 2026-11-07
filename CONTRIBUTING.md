@@ -34,6 +34,7 @@ venv/Scripts/python -m unittest discover -s tests -v
 ## 几条约定
 
 - **版本号只有一个来源**：`app/config.py` 的 `APP_VERSION`。`CHANGELOG.md` 首条、`packaging/` 下的 winget / scoop 清单必须跟着改，发版 CI 会校验 tag 与它一致。
+- **本地打出来的包不能上传到 Release**：PyInstaller 构建是不确定的（嵌入时间戳、依赖解析到的版本都可能不同），同一个版本号在本地和 CI 出的 SHA-256 必然不一样。已发布资产的哈希被 `packaging/winget` 清单引用，替换后 `InstallerSha256` 立刻失配。发版只推 tag，让 `release.yml` 构建。
 - **演示图只放 `docs/assets/`**：GitHub Pages 直接服务这个目录，README 里用 `https://q037180.github.io/SnapOCR/assets/xxx.gif` 引用。`tools/make_*.py` 的输出路径已经是这里，重跑脚本即更新，不要再往 `assets/` 拷副本。
 - **`assets/` 只放图标**：`icon.svg` 是设计源，`icon.ico` 被两个 `.spec` 引用。
 - 注释与文档用中文写，变量名与提交信息的标题用英文短句，正文可以中文。

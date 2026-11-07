@@ -174,6 +174,19 @@ def main():
     if os.path.isfile(EXE):
         write_checksum(EXE, os.path.basename(EXE))
 
+    if not os.environ.get("GITHUB_ACTIONS"):
+        print()
+        print("!" * 68)
+        print("这是本地自测包，【不要】上传到 Release。")
+        print("")
+        print("PyInstaller 构建不确定（嵌入时间戳、依赖解析到的版本），")
+        print("同一个版本号在本地和 CI 打出来的 SHA-256 必然不同。")
+        print("已发布资产的哈希被 packaging/winget 清单引用，")
+        print("用本地包替换会让 InstallerSha256 立刻失配、审核被打回。")
+        print("")
+        print("发版请推 tag，由 .github/workflows/release.yml 构建并上传。")
+        print("!" * 68)
+
 
 if __name__ == "__main__":
     main()
