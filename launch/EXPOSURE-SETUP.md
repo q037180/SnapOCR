@@ -23,8 +23,10 @@
 
 - GitHub 仓库 `description` 改为中英双语（中文搜索词进了仓库元数据）
 - `topics` 补到 20 个
-- GitHub Pages 从 `main / docs` 发布，**已构建成功**：https://q037180.github.io/SnapOCR/ （`status: built`，首页与图片实测 206 / 0.6 s）
+- GitHub Pages 从 `main / docs` 发布，**已构建成功**：https://q037180.github.io/SnapOCR/ （`status: built`，首页与 11 张图全部实测 206 / 0.6 s）
 - 因此 `docs/assets/` 同时兼任 README 与推广稿的图床，共 11 张、7.3 MB
+- 仓库 `homepage` 指向落地页（原值 `https://github.com/q037180/SnapOCR/releases`）；README 顶部导航加「在线介绍」入口
+- README 图片 URL 在 GitHub 渲染后**保持原样、未被 camo 改写**，所以 Pages 图床的可达性直接决定 README 图片能否显示
 
 > `description` 原值（需要回退时用）：
 > `Offline screenshot OCR for dark IDEs and dark-mode pages — auto-inverts dark captures and keeps every result in a searchable history. Windows, MIT.`

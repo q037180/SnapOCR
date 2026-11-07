@@ -12,7 +12,7 @@
 [![issues](https://img.shields.io/github/issues/q037180/SnapOCR?style=flat-square)](https://github.com/q037180/SnapOCR/issues)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue?style=flat-square)](#跨平台兼容性)
 
-### [下载](#安装) · [使用说明](#目录) · [安装](#安装) · [提交 Bug](https://github.com/q037180/SnapOCR/issues)
+### [下载](#安装) · [在线介绍](https://q037180.github.io/SnapOCR/) · [使用说明](#目录) · [提交 Bug](https://github.com/q037180/SnapOCR/issues)
 
 **截屏取字只按一次热键；识别过的内容，随时能搜回来。**
 
