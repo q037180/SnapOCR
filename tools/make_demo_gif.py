@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""自动制作演示 GIF：离屏渲染真实界面帧，用 Pillow 合成 assets/demo-features.gif。
+"""自动制作演示 GIF：离屏渲染真实界面帧，用 Pillow 合成 docs/assets/demo-features.gif。
 
 展示新功能流程：PDF 整档识别（进度）→ 历史结果 → 截图贴图 → 导出 Markdown。
 需在桌面会话下运行（窗口文本光栅化需要正常字体引擎）：
@@ -21,7 +21,7 @@ from app.ui.main_window import MainWindow
 from app.ui.pin_window import PinWindow
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, "assets", "demo-features.gif")
+OUT = os.path.join(ROOT, "docs", "assets", "demo-features.gif")
 
 CAPTIONS = [
     "SnapOCR：本地离线截图 OCR（新功能演示）",

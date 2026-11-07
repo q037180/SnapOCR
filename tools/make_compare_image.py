@@ -5,7 +5,7 @@
 可复现、可核对，不会伪造任何 OCR 识别结果。
 
 运行：venv/Scripts/python.exe tools/make_compare_image.py
-输出：assets/compare-dark-ui.png
+输出：docs/assets/compare-dark-ui.png
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from app.core.engine import _enhance
 
-OUT = os.path.join(ROOT, "assets", "compare-dark-ui.png")
+OUT = os.path.join(ROOT, "docs", "assets", "compare-dark-ui.png")
 FONT = "C:/Windows/Fonts/msyh.ttc"
 FONTB = "C:/Windows/Fonts/msyhbd.ttc"
 MONO = "C:/Windows/Fonts/consola.ttf"

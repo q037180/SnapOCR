@@ -31,8 +31,5 @@ jobs:
       - name: Pyflakes
         run: python -m pyflakes app tools tests entry.py
 
-      - name: Assets mirror in sync
-        run: python tools/sync_assets.py --check
-
       - name: Consistency tests
         run: python -m unittest discover -s tests -v

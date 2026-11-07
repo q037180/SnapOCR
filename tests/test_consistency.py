@@ -8,7 +8,7 @@
 
 所以这里把「能被机器检查的事实」全部锁死：版本号在 5 个文件里必须一致、
 发布链接必须指向当前版本、README 和落地页引用的图片必须真实存在、
-assets/ 与 docs/assets/ 必须逐字节相同。
+演示图只有 docs/assets/ 一份（不再有 assets/ 副本）。
 
 跑法（不需要 pytest，标准库即可）：
     python -m unittest discover -s tests -v
@@ -16,7 +16,6 @@ assets/ 与 docs/assets/ 必须逐字节相同。
 """
 from __future__ import annotations
 
-import filecmp
 import os
 import re
 import sys
@@ -46,7 +45,7 @@ class VersionSingleSource(unittest.TestCase):
         self.assertEqual(m.group(1), VER, "CHANGELOG 最新版本与 app/config.py 的 APP_VERSION 不一致")
 
     def test_winget_manifests(self):
-        base = "launch/winget/manifests/q/q037180/SnapOCR"
+        base = "packaging/winget/manifests/q/q037180/SnapOCR"
         if not os.path.isdir(os.path.join(ROOT, base)):
             self.skipTest("没有 winget 清单")
         version_dirs = [d for d in os.listdir(os.path.join(ROOT, base)) if re.fullmatch(r"\d+\.\d+\.\d+", d)]
@@ -58,7 +57,7 @@ class VersionSingleSource(unittest.TestCase):
         self.assertIsNotNone(sha, "winget installer 的 InstallerSha256 缺失或格式不对")
 
     def test_scoop_manifest(self):
-        p = "launch/scoop/snapocr.json"
+        p = "packaging/scoop/snapocr.json"
         if not os.path.exists(os.path.join(ROOT, p)):
             self.skipTest("没有 scoop 清单")
         body = read(p)
@@ -100,22 +99,39 @@ class ImagesResolve(unittest.TestCase):
         self.assertEqual(missing, [], f"落地页引用了 docs/assets/ 里不存在的图片：{missing}")
 
 
-class AssetsInSync(unittest.TestCase):
-    """assets/ 是源，docs/assets/ 是 Pages 图床，同一张图必须逐字节相同。"""
+class AssetsNoDuplicate(unittest.TestCase):
+    """演示图只有一份：docs/assets/。assets/ 只放打包用图标与设计源文件。
 
-    def test_mirror_is_byte_identical(self):
-        src, dst = os.path.join(ROOT, "assets"), os.path.join(ROOT, "docs", "assets")
+    历史上有过 7.3 MB 的逐字节重复副本（assets/ + docs/assets/），
+    靠一个同步脚本维持一致，改图忘同步就会让 README 和落地页显示不同版本。
+    现在 tools/make_*.py 直接写 docs/assets/，这个断言防止副本重新长回来。
+    """
+
+    ALLOWED = {"icon.svg", "icon.ico"}
+    EXTS = {".png", ".gif", ".jpg", ".jpeg", ".webp"}
+
+    def test_assets_holds_no_bitmaps(self):
+        src = os.path.join(ROOT, "assets")
         if not os.path.isdir(src):
-            self.skipTest("没有 assets/")
-        exts = {".png", ".gif", ".jpg", ".jpeg", ".webp"}
-        drift = []
-        for name in sorted(os.listdir(src)):
-            if os.path.splitext(name)[1].lower() not in exts:
-                continue
-            d = os.path.join(dst, name)
-            if not os.path.exists(d) or not filecmp.cmp(os.path.join(src, name), d, shallow=False):
-                drift.append(name)
-        self.assertEqual(drift, [], f"这些图与 docs/assets/ 不同步：{drift}（跑 tools/sync_assets.py）")
+            return
+        stray = sorted(
+            n for n in os.listdir(src)
+            if os.path.splitext(n)[1].lower() in self.EXTS and n not in self.ALLOWED
+        )
+        self.assertEqual(
+            stray, [],
+            f"assets/ 里又出现了演示图副本：{stray}。"
+            "这些图只应放在 docs/assets/（Pages 图床），否则会与 README 引用脱节。",
+        )
+
+    def test_icon_files_still_present(self):
+        for name in sorted(self.ALLOWED):
+            if name == "icon.ico":
+                continue  # 可由 icon.svg 重新生成，缺失不致命
+            self.assertTrue(
+                os.path.exists(os.path.join(ROOT, "assets", name)),
+                f"assets/{name} 缺失（图标源文件，打包与改图都要用）",
+            )
 
 
 class PackageFiles(unittest.TestCase):

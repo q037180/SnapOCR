@@ -7,7 +7,7 @@
 中间插入章节卡，末尾定格，使总时长约 15 秒。
 
 运行：venv/Scripts/python.exe tools/make_hero_gif.py
-输出：assets/hero-15s.gif
+输出：docs/assets/hero-15s.gif
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, "assets", "hero-15s.gif")
+OUT = os.path.join(ROOT, "docs", "assets", "hero-15s.gif")
 FONT = "C:/Windows/Fonts/msyh.ttc"
 FONTB = "C:/Windows/Fonts/msyhbd.ttc"
 

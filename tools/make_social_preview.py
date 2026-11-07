@@ -1,7 +1,7 @@
 """生成 GitHub Social Preview（1280x640）。
 
 用法：python tools/make_social_preview.py
-输出：assets/social-preview.png
+输出：docs/assets/social-preview.png
 
 仓库 Settings -> Social preview -> Upload an image 上传即可。
 中文标题用系统微软雅黑；没有字体时退化为 DejaVu（中文会缺字，故不静默通过）。
@@ -15,7 +15,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "assets" / "social-preview.png"
+OUT = ROOT / "docs" / "assets" / "social-preview.png"
 W, H = 1280, 640
 
 FONT_BOLD = "C:/Windows/Fonts/msyhbd.ttc"

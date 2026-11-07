@@ -192,7 +192,7 @@ python entry.py
 - 打包与出图还需要额外依赖（pyinstaller / py7zr / Pillow）：`pip install -r requirements-dev.txt`
 - 想自己打包单文件版：`pyinstaller SnapOCR.spec --noconfirm`
 - 想自己打包绿色版：`pyinstaller SnapOCR-portable.spec --noconfirm --workpath build/portable --distpath dist`，再运行 `python tools/make_portable_7z.py`（版本号自动取自 `app/config.py` 的 `APP_VERSION`）
-- 改了演示图之后同步到落地页图床：`python tools/sync_assets.py`
+- 改了演示图：直接重跑对应的 `tools/make_*.py`，它们写的就是落地页图床目录 `docs/assets/`
 - 提交前自检：`python -m unittest discover -s tests -v`（校验版本号、下载链接、图片引用、图床一致性）
 
 性能参考：基于 RapidOCR（PP-OCRv6 模型），1080p 全屏识别约 7–10 秒（视 CPU 与文字密度），框选小区域秒出。
@@ -240,8 +240,9 @@ SnapOCR/
 │     ├─ preview_popup.py # 历史条目浮窗预览
 │     ├─ settings_dialog.py  # 侧边栏设置页
 │     └─ translate_dialog.py # 翻译窗口
-├─ assets/                   # 演示 GIF、图标与投稿对比图
-├─ launch/                   # 首发投稿短文与发布清单
+├─ assets/                   # 图标源文件（icon.svg）与打包用 icon.ico
+├─ docs/                     # GitHub Pages 落地页；docs/assets/ 是演示图的唯一副本
+├─ packaging/                # winget / scoop 包管理器清单
 ├─ tests/platform_check.py   # 平台自检脚本
 ├─ tools/make_demo_gif.py       # 功能演示 GIF
 ├─ tools/make_compare_image.py  # 深色截图增强对比图
