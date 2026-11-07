@@ -143,6 +143,22 @@ class PackageFiles(unittest.TestCase):
             for icon in re.findall(r'icon="([^"]+)"', body):
                 self.assertTrue(os.path.exists(os.path.join(ROOT, icon)), f"{spec} 引用的图标不存在：{icon}")
 
+    def test_spec_datas_exist(self):
+        """spec 里的 ("源路径", "目标路径") 数据项必须真实存在。
+
+        演示图曾经同时存在于 assets/ 与 docs/assets/，删副本时必须确认
+        没有把被 datas 引用的文件一起删掉，否则 PyInstaller 会直接失败。
+        """
+        for spec in ("SnapOCR.spec", "SnapOCR-portable.spec"):
+            body = read(spec)
+            for src in re.findall(r'\(\s*"([^"]+)"\s*,\s*"[^"]*"\s*\)', body):
+                if src.startswith(("http", "\\", "$")):
+                    continue
+                self.assertTrue(
+                    os.path.exists(os.path.join(ROOT, src)),
+                    f"{spec} 的数据项来源不存在：{src}",
+                )
+
     def test_bundled_app_asset_exists(self):
         self.assertTrue(os.path.exists(os.path.join(ROOT, "app", "assets", "bg.png")),
                         "app/assets/bg.png 缺失，主窗口背景会静默降级")
